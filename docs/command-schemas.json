@@ -1,0 +1,1299 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "4.2",
+  "description": "Windows Desktop Automation Command Schemas - Lazy-loaded detailed documentation. v4.2: WinRT native OCR (3.2x faster)",
+  "commands": {
+    "explore": {
+      "category": "discovery",
+      "description": "List all visible windows on desktop. ALWAYS start here to understand the current state.",
+      "schema": {
+        "action": { "type": "string", "const": "explore" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "explore" },
+      "returns": {
+        "status": "success",
+        "count": 5,
+        "data": [
+          {
+            "Title": "Calculator",
+            "AutomationId": "MainForm",
+            "ClassName": "ApplicationFrameWindow",
+            "ProcessId": 12345,
+            "Type": "Window",
+            "IsEnabled": true,
+            "Rect": "{X=100,Y=200,Width=400,Height=500}"
+          }
+        ]
+      },
+      "tips": ["Use this command first to discover available windows", "Results include ProcessId for kill_process if needed"]
+    },
+    "explore_window": {
+      "category": "discovery",
+      "description": "Explore UI elements inside a specific window. Use after explore to dive deeper.",
+      "schema": {
+        "action": { "type": "string", "const": "explore_window" },
+        "selector": { "type": "string", "description": "Window title or AutomationId (partial match)" },
+        "max_depth": { "type": "integer", "default": 2, "description": "How deep to traverse the UI tree" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["max_depth"],
+      "example": { "action": "explore_window", "selector": "Calculator", "max_depth": 2 },
+      "returns": {
+        "status": "success",
+        "window": "Calculator",
+        "elements": []
+      },
+      "tips": ["Increase max_depth to find deeply nested elements", "Elements include Name, AutomationId, and ControlType"]
+    },
+    "find_element": {
+      "category": "discovery",
+      "description": "Find a specific element and get detailed info including clickable coordinates.",
+      "schema": {
+        "action": { "type": "string", "const": "find_element" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "window": { "type": "string", "description": "Limit search to specific window" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["window"],
+      "example": { "action": "find_element", "selector": "Save", "window": "Notepad" },
+      "returns": {
+        "status": "success",
+        "data": {
+          "name": "Save",
+          "automation_id": "btn_save",
+          "control_type": "Button",
+          "bounds": { "x": 100, "y": 200, "width": 80, "height": 30 },
+          "clickable_point": { "x": 140, "y": 215 }
+        }
+      },
+      "tips": ["Use clickable_point with click_at if direct click fails"]
+    },
+    "get_window_info": {
+      "category": "discovery",
+      "description": "Get comprehensive information about a specific window.",
+      "schema": {
+        "action": { "type": "string", "const": "get_window_info" },
+        "selector": { "type": "string", "description": "Window title or AutomationId" }
+      },
+      "required": ["action", "selector"],
+      "optional": [],
+      "example": { "action": "get_window_info", "selector": "Notepad" },
+      "returns": {
+        "status": "success",
+        "data": {
+          "title": "Notepad",
+          "class": "Notepad",
+          "process_id": 12345,
+          "handle": "0x001234",
+          "bounds": { "x": 100, "y": 100, "width": 800, "height": 600 },
+          "state": "normal",
+          "is_modal": false
+        }
+      },
+      "tips": ["Returns window state: normal, minimized, maximized"]
+    },
+    "wait_for_element": {
+      "category": "discovery",
+      "description": "Wait for a UI element to appear with configurable timeout.",
+      "schema": {
+        "action": { "type": "string", "const": "wait_for_element" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "window": { "type": "string", "description": "Limit search to specific window" },
+        "timeout": { "type": "integer", "default": 5000, "description": "Timeout in milliseconds" },
+        "poll_interval": { "type": "integer", "default": 200, "description": "Polling interval in milliseconds" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["window", "timeout", "poll_interval"],
+      "example": { "action": "wait_for_element", "selector": "Save", "window": "Notepad", "timeout": 5000 },
+      "returns": {
+        "status": "success",
+        "data": { "name": "Save", "automation_id": "btn_save", "control_type": "Button" },
+        "elapsed_ms": 450
+      },
+      "tips": ["Use instead of fixed delays for more reliable automation"]
+    },
+    "wait_for_state": {
+      "category": "discovery",
+      "description": "Wait for element to reach a specific state (enabled, disabled, visible, hidden, exists, not_exists).",
+      "schema": {
+        "action": { "type": "string", "const": "wait_for_state" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "state": { "type": "string", "enum": ["enabled", "disabled", "visible", "hidden", "exists", "not_exists"] },
+        "window": { "type": "string", "description": "Limit search to specific window" },
+        "timeout": { "type": "integer", "default": 5000 },
+        "poll_interval": { "type": "integer", "default": 200 }
+      },
+      "required": ["action", "selector", "state"],
+      "optional": ["window", "timeout", "poll_interval"],
+      "example": { "action": "wait_for_state", "selector": "SaveButton", "state": "enabled", "timeout": 5000 },
+      "returns": { "status": "success", "state": "enabled", "elapsed_ms": 1250 },
+      "tips": ["Use 'not_exists' to wait for loading spinners to disappear", "Use 'enabled' to wait for buttons to become clickable"]
+    },
+    "focus_window": {
+      "category": "window_management",
+      "description": "Bring window to foreground. Required before interacting with a window.",
+      "schema": {
+        "action": { "type": "string", "const": "focus_window" },
+        "selector": { "type": "string", "description": "Window title or AutomationId (partial match)" }
+      },
+      "required": ["action", "selector"],
+      "optional": [],
+      "example": { "action": "focus_window", "selector": "Notepad" },
+      "returns": { "status": "success", "action": "focus_window" },
+      "tips": ["Always focus before clicking or typing", "Partial matching: 'Note' matches 'Notepad - Untitled'"]
+    },
+    "close_window": {
+      "category": "window_management",
+      "description": "Close a window gracefully.",
+      "schema": {
+        "action": { "type": "string", "const": "close_window" },
+        "selector": { "type": "string", "description": "Window title or AutomationId" }
+      },
+      "required": ["action", "selector"],
+      "optional": [],
+      "example": { "action": "close_window", "selector": "Notepad" },
+      "returns": { "status": "success" },
+      "tips": ["May trigger save dialogs - handle with key_press or file_dialog commands"]
+    },
+    "wait_for_window": {
+      "category": "window_management",
+      "description": "Wait for a window to appear. Useful after launching apps.",
+      "schema": {
+        "action": { "type": "string", "const": "wait_for_window" },
+        "selector": { "type": "string", "description": "Window title to wait for" },
+        "timeout": { "type": "integer", "default": 10000, "description": "Timeout in milliseconds" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["timeout"],
+      "example": { "action": "wait_for_window", "selector": "Save As", "timeout": 10000 },
+      "returns": { "status": "success" },
+      "tips": ["Use after launch_app or hotkey that opens dialogs"]
+    },
+    "move_window": {
+      "category": "window_management",
+      "description": "Move window to specified screen coordinates.",
+      "schema": {
+        "action": { "type": "string", "const": "move_window" },
+        "selector": { "type": "string" },
+        "x": { "type": "integer", "description": "X coordinate" },
+        "y": { "type": "integer", "description": "Y coordinate" }
+      },
+      "required": ["action", "selector", "x", "y"],
+      "optional": [],
+      "example": { "action": "move_window", "selector": "Notepad", "x": 100, "y": 100 },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "resize_window": {
+      "category": "window_management",
+      "description": "Resize window to specified dimensions.",
+      "schema": {
+        "action": { "type": "string", "const": "resize_window" },
+        "selector": { "type": "string" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" }
+      },
+      "required": ["action", "selector", "width", "height"],
+      "optional": [],
+      "example": { "action": "resize_window", "selector": "Notepad", "width": 800, "height": 600 },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "minimize_window": {
+      "category": "window_management",
+      "description": "Minimize a window.",
+      "schema": {
+        "action": { "type": "string", "const": "minimize_window" },
+        "selector": { "type": "string" }
+      },
+      "required": ["action", "selector"],
+      "optional": [],
+      "example": { "action": "minimize_window", "selector": "Notepad" },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "maximize_window": {
+      "category": "window_management",
+      "description": "Maximize a window.",
+      "schema": {
+        "action": { "type": "string", "const": "maximize_window" },
+        "selector": { "type": "string" }
+      },
+      "required": ["action", "selector"],
+      "optional": [],
+      "example": { "action": "maximize_window", "selector": "Notepad" },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "restore_window": {
+      "category": "window_management",
+      "description": "Restore window from minimized or maximized state.",
+      "schema": {
+        "action": { "type": "string", "const": "restore_window" },
+        "selector": { "type": "string" }
+      },
+      "required": ["action", "selector"],
+      "optional": [],
+      "example": { "action": "restore_window", "selector": "Notepad" },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "move_to_monitor": {
+      "category": "window_management",
+      "description": "Move window to a specific monitor (multi-display setups).",
+      "schema": {
+        "action": { "type": "string", "const": "move_to_monitor" },
+        "selector": { "type": "string" },
+        "monitor": { "type": "integer", "description": "Monitor index (0-based)" },
+        "position": { "type": "string", "enum": ["center", "topleft", "topright", "bottomleft", "bottomright"], "default": "center" }
+      },
+      "required": ["action", "selector", "monitor"],
+      "optional": ["position"],
+      "example": { "action": "move_to_monitor", "selector": "Notepad", "monitor": 1, "position": "center" },
+      "returns": { "status": "success", "moved_to": { "monitor": 1, "position": "center", "x": 1920, "y": 540 } },
+      "tips": ["Use list_monitors first to see available indices"]
+    },
+    "launch_app": {
+      "category": "app_control",
+      "description": "Start an application by path or executable name.",
+      "schema": {
+        "action": { "type": "string", "const": "launch_app" },
+        "path": { "type": "string", "description": "Executable path or name" },
+        "args": { "type": "string", "description": "Command line arguments" },
+        "wait_for_window": { "type": "string", "description": "Wait for window to appear" }
+      },
+      "required": ["action", "path"],
+      "optional": ["args", "wait_for_window"],
+      "example": { "action": "launch_app", "path": "notepad.exe", "wait_for_window": "Notepad" },
+      "returns": { "status": "success", "pid": 12345 },
+      "tips": ["Use wait_for_window to ensure app is ready before interaction"]
+    },
+    "list_processes": {
+      "category": "app_control",
+      "description": "List running processes, optionally filtered by name.",
+      "schema": {
+        "action": { "type": "string", "const": "list_processes" },
+        "filter": { "type": "string", "description": "Filter by process name" },
+        "show_windows": { "type": "boolean", "default": false }
+      },
+      "required": ["action"],
+      "optional": ["filter", "show_windows"],
+      "example": { "action": "list_processes", "filter": "chrome", "show_windows": true },
+      "returns": { "status": "success", "count": 5, "data": [] },
+      "tips": ["Use to find stuck applications before kill_process"]
+    },
+    "kill_process": {
+      "category": "app_control",
+      "description": "Kill a process by PID or name.",
+      "schema": {
+        "action": { "type": "string", "const": "kill_process" },
+        "pid": { "type": "integer", "description": "Process ID" },
+        "name": { "type": "string", "description": "Process name (kills all matching)" },
+        "force": { "type": "boolean", "default": false }
+      },
+      "required": ["action"],
+      "optional": ["pid", "name", "force"],
+      "example": { "action": "kill_process", "name": "notepad" },
+      "returns": { "status": "success" },
+      "tips": ["Either pid or name is required", "Use force=true for unresponsive apps"]
+    },
+    "click": {
+      "category": "mouse",
+      "description": "Click on a UI element by selector.",
+      "schema": {
+        "action": { "type": "string", "const": "click" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "image_hint": { "type": "string", "description": "Image file for visual fallback" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["image_hint"],
+      "example": { "action": "click", "selector": "Save" },
+      "returns": { "status": "success" },
+      "tips": ["Use image_hint for legacy/custom UIs", "Focus window first"]
+    },
+    "double_click": {
+      "category": "mouse",
+      "description": "Double-click on a UI element.",
+      "schema": {
+        "action": { "type": "string", "const": "double_click" },
+        "selector": { "type": "string" },
+        "image_hint": { "type": "string" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["image_hint"],
+      "example": { "action": "double_click", "selector": "FileItem" },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "right_click": {
+      "category": "mouse",
+      "description": "Right-click on a UI element to open context menu.",
+      "schema": {
+        "action": { "type": "string", "const": "right_click" },
+        "selector": { "type": "string" },
+        "image_hint": { "type": "string" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["image_hint"],
+      "example": { "action": "right_click", "selector": "Desktop" },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "long_press": {
+      "category": "mouse",
+      "description": "Press and hold on an element.",
+      "schema": {
+        "action": { "type": "string", "const": "long_press" },
+        "selector": { "type": "string" },
+        "duration": { "type": "integer", "default": 1000, "description": "Hold duration in ms" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["duration"],
+      "example": { "action": "long_press", "selector": "Item", "duration": 1000 },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "click_at": {
+      "category": "mouse",
+      "description": "Click at absolute screen coordinates. Useful for custom-drawn UIs.",
+      "schema": {
+        "action": { "type": "string", "const": "click_at" },
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "button": { "type": "string", "enum": ["left", "right", "middle"], "default": "left" }
+      },
+      "required": ["action", "x", "y"],
+      "optional": ["button"],
+      "example": { "action": "click_at", "x": 500, "y": 300, "button": "left" },
+      "returns": { "status": "success" },
+      "tips": ["Use find_element to get coordinates first"]
+    },
+    "mouse_move": {
+      "category": "mouse",
+      "description": "Move mouse cursor to coordinates or element.",
+      "schema": {
+        "action": { "type": "string", "const": "mouse_move" },
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "selector": { "type": "string" }
+      },
+      "required": ["action"],
+      "optional": ["x", "y", "selector"],
+      "example": { "action": "mouse_move", "x": 500, "y": 300 },
+      "returns": { "status": "success" },
+      "tips": ["Use either x/y coordinates OR selector, not both"]
+    },
+    "drag_and_drop": {
+      "category": "mouse",
+      "description": "Drag from one position to another.",
+      "schema": {
+        "action": { "type": "string", "const": "drag_and_drop" },
+        "from_selector": { "type": "string" },
+        "to_selector": { "type": "string" },
+        "from_x": { "type": "integer" },
+        "from_y": { "type": "integer" },
+        "to_x": { "type": "integer" },
+        "to_y": { "type": "integer" }
+      },
+      "required": ["action"],
+      "optional": ["from_selector", "to_selector", "from_x", "from_y", "to_x", "to_y"],
+      "example": { "action": "drag_and_drop", "from_x": 100, "from_y": 200, "to_x": 300, "to_y": 400 },
+      "returns": { "status": "success" },
+      "tips": ["Use selectors OR coordinates, not mixed"]
+    },
+    "scroll": {
+      "category": "mouse",
+      "description": "Scroll mouse wheel up or down.",
+      "schema": {
+        "action": { "type": "string", "const": "scroll" },
+        "direction": { "type": "string", "enum": ["up", "down"] },
+        "amount": { "type": "integer", "description": "Scroll steps" }
+      },
+      "required": ["action", "direction", "amount"],
+      "optional": [],
+      "example": { "action": "scroll", "direction": "down", "amount": 200 },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "mouse_path": {
+      "category": "mouse",
+      "description": "Move mouse smoothly through a series of waypoints.",
+      "schema": {
+        "action": { "type": "string", "const": "mouse_path" },
+        "points": { "type": "array", "items": { "type": "array", "items": { "type": "integer" } }, "description": "Array of [x, y] coordinates" },
+        "duration": { "type": "integer", "default": 300, "description": "Total duration in ms" }
+      },
+      "required": ["action", "points"],
+      "optional": ["duration"],
+      "example": { "action": "mouse_path", "points": [[100, 100], [200, 150], [300, 100]], "duration": 500 },
+      "returns": { "status": "success" },
+      "tips": ["Points can be [x,y] arrays or {x,y} objects", "Use for drawing or natural movement"]
+    },
+    "mouse_bezier": {
+      "category": "mouse",
+      "description": "Move mouse along a smooth cubic bezier curve.",
+      "schema": {
+        "action": { "type": "string", "const": "mouse_bezier" },
+        "start": { "type": "array", "description": "[x, y] start point" },
+        "control1": { "type": "array", "description": "[x, y] first control point" },
+        "control2": { "type": "array", "description": "[x, y] second control point" },
+        "end": { "type": "array", "description": "[x, y] end point" },
+        "steps": { "type": "integer", "default": 50 },
+        "duration": { "type": "integer", "default": 300 }
+      },
+      "required": ["action", "start", "control1", "control2", "end"],
+      "optional": ["steps", "duration"],
+      "example": { "action": "mouse_bezier", "start": [100, 100], "control1": [150, 50], "control2": [250, 50], "end": [300, 100], "steps": 50, "duration": 500 },
+      "returns": { "status": "success" },
+      "tips": ["Use for signature simulation or natural curves"]
+    },
+    "draw": {
+      "category": "mouse",
+      "description": "Hold mouse button, move along path, release. For drawing applications.",
+      "schema": {
+        "action": { "type": "string", "const": "draw" },
+        "points": { "type": "array", "items": { "type": "array" } },
+        "button": { "type": "string", "enum": ["left", "right", "middle"], "default": "left" },
+        "duration": { "type": "integer", "default": 300 }
+      },
+      "required": ["action", "points"],
+      "optional": ["button", "duration"],
+      "example": { "action": "draw", "points": [[100, 100], [200, 200], [300, 100]], "button": "left", "duration": 500 },
+      "returns": { "status": "success" },
+      "tips": ["Automatically holds button at start and releases at end"]
+    },
+    "mouse_down": {
+      "category": "mouse",
+      "description": "Press and hold mouse button without releasing.",
+      "schema": {
+        "action": { "type": "string", "const": "mouse_down" },
+        "button": { "type": "string", "enum": ["left", "right", "middle"] },
+        "x": { "type": "integer" },
+        "y": { "type": "integer" }
+      },
+      "required": ["action", "button"],
+      "optional": ["x", "y"],
+      "example": { "action": "mouse_down", "button": "left", "x": 100, "y": 200 },
+      "returns": { "status": "success" },
+      "tips": ["Always pair with mouse_up to release"]
+    },
+    "mouse_up": {
+      "category": "mouse",
+      "description": "Release a previously pressed mouse button.",
+      "schema": {
+        "action": { "type": "string", "const": "mouse_up" },
+        "button": { "type": "string", "enum": ["left", "right", "middle"] }
+      },
+      "required": ["action", "button"],
+      "optional": [],
+      "example": { "action": "mouse_up", "button": "left" },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "click_relative": {
+      "category": "mouse",
+      "description": "Click at offset from element's anchor point.",
+      "schema": {
+        "action": { "type": "string", "const": "click_relative" },
+        "selector": { "type": "string", "description": "Reference element" },
+        "anchor": { "type": "string", "enum": ["center", "topleft", "topright", "bottomleft", "bottomright"], "default": "center" },
+        "offset_x": { "type": "integer", "description": "Horizontal offset from anchor" },
+        "offset_y": { "type": "integer", "description": "Vertical offset from anchor" },
+        "button": { "type": "string", "enum": ["left", "right", "middle"], "default": "left" }
+      },
+      "required": ["action", "selector", "offset_x", "offset_y"],
+      "optional": ["anchor", "button"],
+      "example": { "action": "click_relative", "selector": "Window", "anchor": "center", "offset_x": 50, "offset_y": 30 },
+      "returns": { "status": "success" },
+      "tips": ["Alias: tap_relative", "Use for elements without automation IDs"]
+    },
+    "type": {
+      "category": "keyboard",
+      "description": "Type text into focused element found by selector.",
+      "schema": {
+        "action": { "type": "string", "const": "type" },
+        "selector": { "type": "string" },
+        "text": { "type": "string" }
+      },
+      "required": ["action", "selector", "text"],
+      "optional": [],
+      "example": { "action": "type", "selector": "TextBox1", "text": "Hello World" },
+      "returns": { "status": "success" },
+      "tips": ["Focus window first"]
+    },
+    "type_here": {
+      "category": "keyboard",
+      "description": "Type text at current cursor position without selector.",
+      "schema": {
+        "action": { "type": "string", "const": "type_here" },
+        "text": { "type": "string" }
+      },
+      "required": ["action", "text"],
+      "optional": [],
+      "example": { "action": "type_here", "text": "Hello World" },
+      "returns": { "status": "success" },
+      "tips": ["Alias: type_at_cursor", "Click on target field first"]
+    },
+    "hotkey": {
+      "category": "keyboard",
+      "description": "Send keyboard shortcuts like Ctrl+C, Alt+F4.",
+      "schema": {
+        "action": { "type": "string", "const": "hotkey" },
+        "keys": { "type": "string", "description": "Key combination (e.g., 'ctrl+s', 'alt+f4')" }
+      },
+      "required": ["action", "keys"],
+      "optional": [],
+      "example": { "action": "hotkey", "keys": "ctrl+s" },
+      "returns": { "status": "success" },
+      "tips": ["Modifiers: ctrl, alt, shift, win", "Common: ctrl+c, ctrl+v, ctrl+s, alt+f4"]
+    },
+    "key_press": {
+      "category": "keyboard",
+      "description": "Send a single key press.",
+      "schema": {
+        "action": { "type": "string", "const": "key_press" },
+        "key": { "type": "string", "description": "Key name (enter, tab, escape, etc.)" }
+      },
+      "required": ["action", "key"],
+      "optional": [],
+      "example": { "action": "key_press", "key": "enter" },
+      "returns": { "status": "success" },
+      "tips": ["Keys: a-z, 0-9, f1-f12, enter, tab, escape, space, backspace, delete, arrows"]
+    },
+    "key_down": {
+      "category": "keyboard",
+      "description": "Press and hold a key without releasing.",
+      "schema": {
+        "action": { "type": "string", "const": "key_down" },
+        "key": { "type": "string" }
+      },
+      "required": ["action", "key"],
+      "optional": [],
+      "example": { "action": "key_down", "key": "shift" },
+      "returns": { "status": "success" },
+      "tips": ["Always pair with key_up", "Useful for modifier keys in complex interactions"]
+    },
+    "key_up": {
+      "category": "keyboard",
+      "description": "Release a previously pressed key.",
+      "schema": {
+        "action": { "type": "string", "const": "key_up" },
+        "key": { "type": "string" }
+      },
+      "required": ["action", "key"],
+      "optional": [],
+      "example": { "action": "key_up", "key": "shift" },
+      "returns": { "status": "success" },
+      "tips": []
+    },
+    "get_clipboard": {
+      "category": "clipboard",
+      "description": "Read text from clipboard.",
+      "schema": {
+        "action": { "type": "string", "const": "get_clipboard" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "get_clipboard" },
+      "returns": { "status": "success", "text": "clipboard content" },
+      "tips": []
+    },
+    "set_clipboard": {
+      "category": "clipboard",
+      "description": "Write text to clipboard.",
+      "schema": {
+        "action": { "type": "string", "const": "set_clipboard" },
+        "text": { "type": "string" }
+      },
+      "required": ["action", "text"],
+      "optional": [],
+      "example": { "action": "set_clipboard", "text": "Text to copy" },
+      "returns": { "status": "success" },
+      "tips": ["Use for data transfer between apps"]
+    },
+    "read_text": {
+      "category": "text_ocr",
+      "description": "Read text from UI element or screen region via OCR.",
+      "schema": {
+        "action": { "type": "string", "const": "read_text" },
+        "selector": { "type": "string" },
+        "region": { "type": "object", "properties": { "x": { "type": "integer" }, "y": { "type": "integer" }, "width": { "type": "integer" }, "height": { "type": "integer" } } }
+      },
+      "required": ["action"],
+      "optional": ["selector", "region"],
+      "example": { "action": "read_text", "selector": "TextArea1" },
+      "returns": { "status": "success", "text": "..." },
+      "tips": ["Use selector for UI elements, region for screen OCR"]
+    },
+    "ocr_region": {
+      "category": "text_ocr",
+      "description": "OCR on explicit screen region. Uses WinRT native OCR (v4.2) for 3.2x faster performance.",
+      "schema": {
+        "action": { "type": "string", "const": "ocr_region" },
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" }
+      },
+      "required": ["action", "x", "y", "width", "height"],
+      "optional": [],
+      "example": { "action": "ocr_region", "x": 100, "y": 200, "width": 300, "height": 50 },
+      "returns": { "status": "success", "text": "Recognized text", "region": {}, "engine": "winrt", "time_ms": 60 },
+      "tips": ["Uses WinRT native OCR (fastest)", "Results cached for 30s", "Use for games or custom UIs"]
+    },
+    "screenshot": {
+      "category": "verification",
+      "description": "Capture screen image.",
+      "schema": {
+        "action": { "type": "string", "const": "screenshot" },
+        "filename": { "type": "string", "description": "Output filename" }
+      },
+      "required": ["action"],
+      "optional": ["filename"],
+      "example": { "action": "screenshot", "filename": "evidence.png" },
+      "returns": { "status": "success", "filename": "evidence.png" },
+      "tips": ["Auto-generates filename if not provided"]
+    },
+    "screenshot_monitor": {
+      "category": "display",
+      "description": "Capture specific monitor by index.",
+      "schema": {
+        "action": { "type": "string", "const": "screenshot_monitor" },
+        "monitor": { "type": "integer", "description": "Monitor index (0-based)" },
+        "filename": { "type": "string" }
+      },
+      "required": ["action", "monitor"],
+      "optional": ["filename"],
+      "example": { "action": "screenshot_monitor", "monitor": 1, "filename": "secondary.png" },
+      "returns": { "status": "success", "filename": "secondary.png", "monitor": 1, "bounds": {} },
+      "tips": ["Use list_monitors to see available indices"]
+    },
+    "list_monitors": {
+      "category": "display",
+      "description": "Enumerate all connected displays.",
+      "schema": {
+        "action": { "type": "string", "const": "list_monitors" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "list_monitors" },
+      "returns": { "status": "success", "count": 2, "data": [] },
+      "tips": []
+    },
+    "file_dialog": {
+      "category": "file_dialog",
+      "description": "Automate Open/Save/Browse file dialogs.",
+      "schema": {
+        "action": { "type": "string", "const": "file_dialog" },
+        "dialog_action": { "type": "string", "enum": ["detect", "set_path", "set_filename", "confirm", "cancel"] },
+        "path": { "type": "string", "description": "Folder path (for set_path)" },
+        "filename": { "type": "string", "description": "Filename (for set_filename)" }
+      },
+      "required": ["action", "dialog_action"],
+      "optional": ["path", "filename"],
+      "example": { "action": "file_dialog", "dialog_action": "set_path", "path": "C:\\Users\\marke\\Documents" },
+      "returns": { "status": "success" },
+      "tips": ["Use detect first to verify dialog is open", "Sequence: set_path -> set_filename -> confirm"]
+    },
+    "batch": {
+      "category": "batch",
+      "description": "Execute multiple commands in sequence.",
+      "schema": {
+        "action": { "type": "string", "const": "batch" },
+        "commands": { "type": "array", "items": { "type": "object" }, "description": "Array of command objects" },
+        "stop_on_error": { "type": "boolean", "default": true },
+        "delay_between": { "type": "integer", "default": 0, "description": "Delay between commands in ms" }
+      },
+      "required": ["action", "commands"],
+      "optional": ["stop_on_error", "delay_between"],
+      "example": { "action": "batch", "commands": [{ "action": "launch_app", "path": "notepad.exe" }, { "action": "wait_for_window", "selector": "Notepad" }], "stop_on_error": true },
+      "returns": { "status": "success", "total": 2, "succeeded": 2, "failed": 0, "results": [] },
+      "tips": ["Use for atomic multi-step workflows"]
+    },
+    "health": {
+      "category": "system",
+      "description": "System health check and bridge status.",
+      "schema": {
+        "action": { "type": "string", "const": "health" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "health" },
+      "returns": { "status": "success", "version": "4.3", "uptime_seconds": 3600, "bridges": { "flaui": "active", "pywinauto": "available (includes: vision, ocr, context)" } },
+      "tips": ["Run before complex automation to verify bridges"]
+    },
+    "get_cursor_position": {
+      "category": "mouse",
+      "description": "Get current mouse cursor coordinates.",
+      "schema": {
+        "action": { "type": "string", "const": "get_cursor_position" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "get_cursor_position" },
+      "returns": { "status": "success", "x": 500, "y": 300 },
+      "tips": ["Use before click_at to verify cursor position", "Useful for debugging mouse automation"]
+    },
+    "get_element_bounds": {
+      "category": "discovery",
+      "description": "Get precise bounding box and center point for an element.",
+      "schema": {
+        "action": { "type": "string", "const": "get_element_bounds" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "window": { "type": "string", "description": "Limit search to specific window" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["window"],
+      "example": { "action": "get_element_bounds", "selector": "SaveButton", "window": "Notepad" },
+      "returns": { "status": "success", "bounds": { "x": 100, "y": 200, "width": 80, "height": 30 }, "center": { "x": 140, "y": 215 } },
+      "tips": ["Returns both bounding box and calculated center point", "Use center coordinates for click_at"]
+    },
+    "element_screenshot": {
+      "category": "verification",
+      "description": "Capture screenshot of a specific element only.",
+      "schema": {
+        "action": { "type": "string", "const": "element_screenshot" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "window": { "type": "string", "description": "Limit search to specific window" },
+        "filename": { "type": "string", "description": "Output filename" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["window", "filename"],
+      "example": { "action": "element_screenshot", "selector": "SubmitButton", "filename": "button.png" },
+      "returns": { "status": "success", "filename": "button.png", "bounds": { "x": 100, "y": 200, "width": 80, "height": 30 } },
+      "tips": ["Captures only the element, not the full screen", "Useful for visual verification and debugging"]
+    },
+    "hover": {
+      "category": "mouse",
+      "description": "Hover mouse over an element for a specified duration.",
+      "schema": {
+        "action": { "type": "string", "const": "hover" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "duration": { "type": "integer", "default": 1000, "description": "Hover duration in milliseconds" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["duration"],
+      "example": { "action": "hover", "selector": "MenuItem", "duration": 1500 },
+      "returns": { "status": "success" },
+      "tips": ["Useful for triggering hover menus and tooltips", "Default duration is 1000ms"]
+    },
+    "mouse_move_eased": {
+      "category": "mouse",
+      "description": "Move mouse cursor with easing functions for natural movement.",
+      "schema": {
+        "action": { "type": "string", "const": "mouse_move_eased" },
+        "x": { "type": "integer", "description": "Target X coordinate" },
+        "y": { "type": "integer", "description": "Target Y coordinate" },
+        "duration": { "type": "integer", "default": 300, "description": "Duration in milliseconds" },
+        "easing": { "type": "string", "enum": ["linear", "ease-in", "ease-out", "ease-in-out", "bounce", "elastic", "cubic", "quart", "sine"], "default": "ease-out", "description": "Easing function" }
+      },
+      "required": ["action", "x", "y"],
+      "optional": ["duration", "easing"],
+      "example": { "action": "mouse_move_eased", "x": 500, "y": 300, "duration": 400, "easing": "ease-in-out" },
+      "returns": { "status": "success" },
+      "tips": ["bounce and elastic provide more dramatic effects", "ease-out feels most natural for pointing"]
+    },
+    "swipe": {
+      "category": "mouse",
+      "description": "Perform touch-style swipe gesture from start to end coordinates.",
+      "schema": {
+        "action": { "type": "string", "const": "swipe" },
+        "from_x": { "type": "integer", "description": "Start X coordinate" },
+        "from_y": { "type": "integer", "description": "Start Y coordinate" },
+        "to_x": { "type": "integer", "description": "End X coordinate" },
+        "to_y": { "type": "integer", "description": "End Y coordinate" },
+        "duration": { "type": "integer", "default": 300, "description": "Swipe duration in milliseconds" }
+      },
+      "required": ["action", "from_x", "from_y", "to_x", "to_y"],
+      "optional": ["duration"],
+      "example": { "action": "swipe", "from_x": 500, "from_y": 600, "to_x": 500, "to_y": 200, "duration": 300 },
+      "returns": { "status": "success" },
+      "tips": ["Useful for touch-enabled UIs and scrolling", "Similar to drag_and_drop but optimized for swipe gestures"]
+    },
+    "wait_for_color": {
+      "category": "discovery",
+      "description": "Wait for a specific pixel color to appear at coordinates.",
+      "schema": {
+        "action": { "type": "string", "const": "wait_for_color" },
+        "x": { "type": "integer", "description": "X coordinate" },
+        "y": { "type": "integer", "description": "Y coordinate" },
+        "color": { "type": "string", "description": "Expected color in hex format (#RRGGBB)" },
+        "tolerance": { "type": "integer", "default": 10, "description": "Color tolerance (0-255)" },
+        "timeout": { "type": "integer", "default": 5000, "description": "Timeout in milliseconds" }
+      },
+      "required": ["action", "x", "y", "color"],
+      "optional": ["tolerance", "timeout"],
+      "example": { "action": "wait_for_color", "x": 100, "y": 200, "color": "#00FF00", "tolerance": 20, "timeout": 5000 },
+      "returns": { "status": "success", "elapsed_ms": 1250 },
+      "tips": ["Useful for waiting for loading indicators to change", "Tolerance allows for slight color variations"]
+    },
+    "wait_for_idle": {
+      "category": "discovery",
+      "description": "Wait for the UI to become idle/responsive.",
+      "schema": {
+        "action": { "type": "string", "const": "wait_for_idle" },
+        "timeout": { "type": "integer", "default": 5000, "description": "Timeout in milliseconds" }
+      },
+      "required": ["action"],
+      "optional": ["timeout"],
+      "example": { "action": "wait_for_idle", "timeout": 10000 },
+      "returns": { "status": "success", "elapsed_ms": 850 },
+      "tips": ["Use after actions that trigger UI processing", "Checks if foreground window is responding"]
+    },
+    "wait_for_text": {
+      "category": "text_ocr",
+      "description": "Wait for specific text to appear on screen via OCR.",
+      "schema": {
+        "action": { "type": "string", "const": "wait_for_text" },
+        "text": { "type": "string", "description": "Text to wait for" },
+        "region": { "type": "object", "properties": { "x": { "type": "integer" }, "y": { "type": "integer" }, "width": { "type": "integer" }, "height": { "type": "integer" } }, "description": "Screen region to search" },
+        "timeout": { "type": "integer", "default": 10000, "description": "Timeout in milliseconds" },
+        "poll_interval": { "type": "integer", "default": 500, "description": "Polling interval in milliseconds" }
+      },
+      "required": ["action", "text"],
+      "optional": ["region", "timeout", "poll_interval"],
+      "example": { "action": "wait_for_text", "text": "Complete", "region": { "x": 100, "y": 200, "width": 300, "height": 50 }, "timeout": 10000 },
+      "returns": { "status": "success", "elapsed_ms": 3500 },
+      "tips": ["Requires Java bridge for OCR", "Specify region to improve performance"]
+    },
+    "subscribe": {
+      "category": "events",
+      "description": "Subscribe to UI element events.",
+      "schema": {
+        "action": { "type": "string", "const": "subscribe" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "event_type": { "type": "string", "enum": ["focus", "invoke", "property_change", "structure_change"], "description": "Type of event to subscribe to" }
+      },
+      "required": ["action", "selector", "event_type"],
+      "optional": [],
+      "example": { "action": "subscribe", "selector": "TextBox1", "event_type": "focus" },
+      "returns": { "status": "success", "subscription_id": "sub_abc123" },
+      "tips": ["Use get_subscriptions to list active subscriptions", "Use unsubscribe with subscription_id to stop"]
+    },
+    "unsubscribe": {
+      "category": "events",
+      "description": "Unsubscribe from UI element events.",
+      "schema": {
+        "action": { "type": "string", "const": "unsubscribe" },
+        "subscription_id": { "type": "string", "description": "Subscription ID from subscribe command" }
+      },
+      "required": ["action", "subscription_id"],
+      "optional": [],
+      "example": { "action": "unsubscribe", "subscription_id": "sub_abc123" },
+      "returns": { "status": "success" },
+      "tips": ["Always unsubscribe when done to free resources"]
+    },
+    "get_subscriptions": {
+      "category": "events",
+      "description": "List all active event subscriptions.",
+      "schema": {
+        "action": { "type": "string", "const": "get_subscriptions" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "get_subscriptions" },
+      "returns": { "status": "success", "count": 2, "subscriptions": [] },
+      "tips": ["Use to monitor active event subscriptions"]
+    },
+    "get_metrics": {
+      "category": "diagnostics",
+      "description": "Get command performance metrics.",
+      "schema": {
+        "action": { "type": "string", "const": "get_metrics" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "get_metrics" },
+      "returns": { "status": "success", "metrics": { "click": { "call_count": 50, "avg_ms": 45.2, "min_ms": 12, "max_ms": 150 } } },
+      "tips": ["Useful for identifying slow commands", "Use clear_metrics to reset"]
+    },
+    "clear_metrics": {
+      "category": "diagnostics",
+      "description": "Clear all performance metrics.",
+      "schema": {
+        "action": { "type": "string", "const": "clear_metrics" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "clear_metrics" },
+      "returns": { "status": "success" },
+      "tips": ["Reset metrics before performance testing"]
+    },
+    "set_debug_mode": {
+      "category": "diagnostics",
+      "description": "Enable or disable verbose debug logging.",
+      "schema": {
+        "action": { "type": "string", "const": "set_debug_mode" },
+        "enabled": { "type": "boolean", "description": "Enable or disable debug mode" }
+      },
+      "required": ["action", "enabled"],
+      "optional": [],
+      "example": { "action": "set_debug_mode", "enabled": true },
+      "returns": { "status": "success", "debug_mode": true },
+      "tips": ["Enable for troubleshooting automation issues", "Disable in production for performance"]
+    },
+    "get_cache_stats": {
+      "category": "diagnostics",
+      "description": "Get element cache statistics.",
+      "schema": {
+        "action": { "type": "string", "const": "get_cache_stats" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "get_cache_stats" },
+      "returns": { "status": "success", "cache_size": 25, "cache_age_ms": 2500, "cache_expiry_ms": 5000 },
+      "tips": ["Monitor cache to optimize performance"]
+    },
+    "clear_cache": {
+      "category": "diagnostics",
+      "description": "Clear the element cache.",
+      "schema": {
+        "action": { "type": "string", "const": "clear_cache" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "clear_cache" },
+      "returns": { "status": "success" },
+      "tips": ["Clear cache after UI structure changes", "Forces fresh element lookup on next command"]
+    },
+    "set_human_mode": {
+      "category": "human_behavior",
+      "description": "Configure human-like behavior settings for realistic automation.",
+      "schema": {
+        "action": { "type": "string", "const": "set_human_mode" },
+        "enabled": { "type": "boolean", "description": "Enable or disable human mode" },
+        "min_pause_ms": { "type": "integer", "default": 50, "description": "Minimum pause between actions" },
+        "max_pause_ms": { "type": "integer", "default": 300, "description": "Maximum pause between actions" },
+        "mouse_jitter": { "type": "number", "default": 2.0, "description": "Mouse movement jitter in pixels" },
+        "typing_error_rate": { "type": "number", "default": 0.03, "description": "Probability of typing errors (0-1)" },
+        "typing_min_delay_ms": { "type": "integer", "default": 50, "description": "Minimum delay between keystrokes" },
+        "typing_max_delay_ms": { "type": "integer", "default": 150, "description": "Maximum delay between keystrokes" },
+        "fatigue_enabled": { "type": "boolean", "default": true, "description": "Enable fatigue simulation" },
+        "fatigue_multiplier": { "type": "number", "default": 0.5, "description": "Fatigue increase per hour (0.5 = 50% slower)" },
+        "thinking_delay_enabled": { "type": "boolean", "default": true, "description": "Enable thinking delays before actions" },
+        "thinking_min_ms": { "type": "integer", "default": 200, "description": "Minimum thinking delay" },
+        "thinking_max_ms": { "type": "integer", "default": 800, "description": "Maximum thinking delay" }
+      },
+      "required": ["action"],
+      "optional": ["enabled", "min_pause_ms", "max_pause_ms", "mouse_jitter", "typing_error_rate", "typing_min_delay_ms", "typing_max_delay_ms", "fatigue_enabled", "fatigue_multiplier", "thinking_delay_enabled", "thinking_min_ms", "thinking_max_ms"],
+      "example": { "action": "set_human_mode", "enabled": true, "typing_error_rate": 0.02, "mouse_jitter": 3.0 },
+      "returns": { "status": "success", "settings": {} },
+      "tips": ["Increase typing_error_rate for more realistic typing", "Use fatigue_enabled to simulate long sessions"]
+    },
+    "get_human_mode": {
+      "category": "human_behavior",
+      "description": "Get current human-like behavior settings.",
+      "schema": {
+        "action": { "type": "string", "const": "get_human_mode" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "get_human_mode" },
+      "returns": { "status": "success", "settings": { "enabled": true, "min_pause_ms": 50, "max_pause_ms": 300 } },
+      "tips": ["Check settings before running automation"]
+    },
+    "human_click": {
+      "category": "human_behavior",
+      "description": "Click with natural mouse movement, random pauses, and optional thinking delay.",
+      "schema": {
+        "action": { "type": "string", "const": "human_click" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "window": { "type": "string", "description": "Limit search to specific window" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["window"],
+      "example": { "action": "human_click", "selector": "SubmitButton" },
+      "returns": { "status": "success" },
+      "tips": ["Uses bezier curves for natural mouse path", "Respects human_mode settings for timing"]
+    },
+    "human_type": {
+      "category": "human_behavior",
+      "description": "Type text with variable speed, occasional typos, and corrections.",
+      "schema": {
+        "action": { "type": "string", "const": "human_type" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "text": { "type": "string", "description": "Text to type" }
+      },
+      "required": ["action", "selector", "text"],
+      "optional": [],
+      "example": { "action": "human_type", "selector": "EmailInput", "text": "hello@example.com" },
+      "returns": { "status": "success" },
+      "tips": ["Simulates typos with adjacent key errors", "Automatically corrects typos with backspace"]
+    },
+    "human_move": {
+      "category": "human_behavior",
+      "description": "Move mouse with bezier curves, jitter, and natural timing.",
+      "schema": {
+        "action": { "type": "string", "const": "human_move" },
+        "x": { "type": "integer", "description": "Target X coordinate" },
+        "y": { "type": "integer", "description": "Target Y coordinate" }
+      },
+      "required": ["action", "x", "y"],
+      "optional": [],
+      "example": { "action": "human_move", "x": 500, "y": 300 },
+      "returns": { "status": "success" },
+      "tips": ["Uses bezier curves with random control points", "Adds micro-jitter during movement"]
+    },
+    "element_exists": {
+      "category": "token_efficient",
+      "description": "Check if element exists. Returns only boolean (~30 tokens). Use for conditional logic.",
+      "schema": {
+        "action": { "type": "string", "const": "element_exists" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "window": { "type": "string", "description": "Limit search to specific window" },
+        "timeout": { "type": "integer", "default": 0, "description": "Wait timeout in ms (0 = immediate check)" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["window", "timeout"],
+      "example": { "action": "element_exists", "selector": "SaveButton", "window": "Notepad" },
+      "returns": { "status": "success", "action": "element_exists", "exists": true },
+      "tips": ["Use timeout > 0 to wait for element", "Returns only boolean for minimal token usage"]
+    },
+    "get_interactive_elements": {
+      "category": "token_efficient",
+      "description": "Get only clickable/typeable elements (~500 tokens). Filters to interactive controls only.",
+      "schema": {
+        "action": { "type": "string", "const": "get_interactive_elements" },
+        "window": { "type": "string", "description": "Limit search to specific window" },
+        "max_count": { "type": "integer", "default": 50, "description": "Maximum elements to return" }
+      },
+      "required": ["action"],
+      "optional": ["window", "max_count"],
+      "example": { "action": "get_interactive_elements", "window": "Calculator", "max_count": 20 },
+      "returns": { "status": "success", "action": "get_interactive_elements", "count": 10, "elements": [{"name": "Button1", "type": "Button", "id": "btn1", "x": 100, "y": 200, "w": 80, "h": 30}] },
+      "tips": ["Returns only buttons, textboxes, checkboxes, etc.", "Much smaller than explore_window"]
+    },
+    "get_window_summary": {
+      "category": "token_efficient",
+      "description": "Get structured window summary (~300 tokens). Overview without full element tree.",
+      "schema": {
+        "action": { "type": "string", "const": "get_window_summary" },
+        "selector": { "type": "string", "description": "Window title or AutomationId" }
+      },
+      "required": ["action", "selector"],
+      "optional": [],
+      "example": { "action": "get_window_summary", "selector": "Calculator" },
+      "returns": { "status": "success", "action": "get_window_summary", "data": { "title": "Calculator", "bounds": { "x": 100, "y": 100, "w": 400, "h": 500 }, "element_count": 50, "types": { "Button": 20, "Text": 10 }, "key_elements": [] } },
+      "tips": ["Shows element counts by type", "Lists first 10 key interactive elements"]
+    },
+    "describe_element": {
+      "category": "token_efficient",
+      "description": "Describe element at coordinates using vision (~100 tokens). For unknown/canvas elements.",
+      "schema": {
+        "action": { "type": "string", "const": "describe_element" },
+        "x": { "type": "integer", "description": "X coordinate" },
+        "y": { "type": "integer", "description": "Y coordinate" },
+        "width": { "type": "integer", "default": 100, "description": "Region width" },
+        "height": { "type": "integer", "default": 50, "description": "Region height" }
+      },
+      "required": ["action", "x", "y"],
+      "optional": ["width", "height"],
+      "example": { "action": "describe_element", "x": 500, "y": 300 },
+      "returns": { "status": "success", "action": "describe_element", "x": 500, "y": 300, "text": "Submit", "element_type": "button", "element_count": 1 },
+      "tips": ["Uses vision/OCR for analysis", "Useful for Flutter/Electron/Canvas apps"]
+    },
+    "get_element_brief": {
+      "category": "token_efficient",
+      "description": "Get minimal element info (~100 tokens). Just name, ID, type, and bounds.",
+      "schema": {
+        "action": { "type": "string", "const": "get_element_brief" },
+        "selector": { "type": "string", "description": "Element name or AutomationId" },
+        "window": { "type": "string", "description": "Limit search to specific window" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["window"],
+      "example": { "action": "get_element_brief", "selector": "SaveButton", "window": "Notepad" },
+      "returns": { "status": "success", "action": "get_element_brief", "name": "Save", "id": "SaveButton", "type": "Button", "x": 100, "y": 200, "w": 80, "h": 30 },
+      "tips": ["Much smaller than find_element", "Use when you only need coordinates"]
+    },
+    "fuzzy_find_element": {
+      "category": "token_efficient",
+      "description": "Find elements using fuzzy text matching. Works with partial names and typos.",
+      "schema": {
+        "action": { "type": "string", "const": "fuzzy_find_element" },
+        "text": { "type": "string", "description": "Search text (can be partial or have typos)" },
+        "window": { "type": "string", "description": "Limit search to specific window" },
+        "threshold": { "type": "number", "default": 0.6, "description": "Similarity threshold (0-1)" },
+        "max_results": { "type": "integer", "default": 5, "description": "Maximum results" }
+      },
+      "required": ["action", "text"],
+      "optional": ["window", "threshold", "max_results"],
+      "example": { "action": "fuzzy_find_element", "text": "sav", "window": "Notepad", "threshold": 0.6 },
+      "returns": { "status": "success", "action": "fuzzy_find_element", "count": 2, "matches": [{"name": "Save", "id": "SaveBtn", "type": "Button", "score": 0.9, "x": 100, "y": 200}] },
+      "tips": ["Uses Levenshtein distance for matching", "Always scope to window for performance"]
+    },
+    "vision_click": {
+      "category": "vision",
+      "description": "Click on text using vision/OCR. Works on Flutter, Electron, Canvas apps where FlaUI fails.",
+      "schema": {
+        "action": { "type": "string", "const": "vision_click" },
+        "text": { "type": "string", "description": "Text to find and click" },
+        "case_sensitive": { "type": "boolean", "default": false, "description": "Case-sensitive matching" }
+      },
+      "required": ["action", "text"],
+      "optional": ["case_sensitive"],
+      "example": { "action": "vision_click", "text": "Submit" },
+      "returns": { "status": "success", "action": "vision_click_text", "clicked": true, "click_coords": { "x": 500, "y": 300 }, "search_text": "Submit" },
+      "tips": ["Falls back to OCR when FlaUI fails", "Works on custom/canvas UIs"]
+    },
+    "smart_click": {
+      "category": "smart_fallback",
+      "description": "Click element using smart fallback chain: FlaUI first, then vision/OCR. Best for mixed app environments.",
+      "schema": {
+        "action": { "type": "string", "const": "smart_click" },
+        "selector": { "type": "string", "description": "Element name, AutomationId, or visible text" },
+        "text": { "type": "string", "description": "Alternative to selector - text to find" },
+        "window": { "type": "string", "description": "Limit search to specific window" },
+        "vision_fallback": { "type": "boolean", "default": true, "description": "Enable vision fallback if FlaUI fails" }
+      },
+      "required": ["action"],
+      "required_one_of": ["selector", "text"],
+      "optional": ["window", "vision_fallback"],
+      "example": { "action": "smart_click", "selector": "Submit", "window": "MyApp" },
+      "returns": { "status": "success", "action": "smart_click", "method_used": "flaui", "x": 500, "y": 300 },
+      "tips": ["Use this for apps that mix standard and custom UI", "method_used shows which engine succeeded: flaui or vision"]
+    },
+    "smart_type": {
+      "category": "smart_fallback",
+      "description": "Find element and type text using smart fallback chain: FlaUI first, then vision/OCR.",
+      "schema": {
+        "action": { "type": "string", "const": "smart_type" },
+        "selector": { "type": "string", "description": "Element name, AutomationId, or visible text" },
+        "text": { "type": "string", "description": "Alternative to selector - text to find" },
+        "input": { "type": "string", "description": "Text to type" },
+        "value": { "type": "string", "description": "Alternative to input - text to type" },
+        "window": { "type": "string", "description": "Limit search to specific window" },
+        "clear": { "type": "boolean", "default": false, "description": "Clear existing text before typing (Ctrl+A)" },
+        "vision_fallback": { "type": "boolean", "default": true, "description": "Enable vision fallback if FlaUI fails" }
+      },
+      "required": ["action"],
+      "required_one_of": ["selector", "text"],
+      "required_also": ["input", "value"],
+      "optional": ["window", "clear", "vision_fallback"],
+      "example": { "action": "smart_type", "selector": "Search", "input": "hello world", "window": "MyApp" },
+      "returns": { "status": "success", "action": "smart_type", "method_used": "flaui", "typed": 11, "x": 500, "y": 300 },
+      "tips": ["Use clear: true to replace existing text", "method_used shows which engine succeeded"]
+    }
+  },
+  "categories": {
+    "discovery": {
+      "name": "Discovery",
+      "description": "Commands to explore and find windows/elements",
+      "commands": ["explore", "explore_window", "find_element", "get_window_info", "wait_for_element", "wait_for_state", "get_element_bounds", "wait_for_color", "wait_for_idle"]
+    },
+    "window_management": {
+      "name": "Window Management",
+      "description": "Commands to control window state and position",
+      "commands": ["focus_window", "close_window", "wait_for_window", "move_window", "resize_window", "minimize_window", "maximize_window", "restore_window", "move_to_monitor"]
+    },
+    "app_control": {
+      "name": "Application Control",
+      "description": "Launch and manage processes",
+      "commands": ["launch_app", "list_processes", "kill_process"]
+    },
+    "mouse": {
+      "name": "Mouse Actions",
+      "description": "Mouse clicks, movement, and gestures",
+      "commands": ["click", "double_click", "right_click", "long_press", "click_at", "mouse_move", "drag_and_drop", "scroll", "mouse_path", "mouse_bezier", "draw", "mouse_down", "mouse_up", "click_relative", "get_cursor_position", "hover", "mouse_move_eased", "swipe"]
+    },
+    "keyboard": {
+      "name": "Keyboard Actions",
+      "description": "Typing and key presses",
+      "commands": ["type", "type_here", "hotkey", "key_press", "key_down", "key_up"]
+    },
+    "clipboard": {
+      "name": "Clipboard",
+      "description": "Read and write clipboard",
+      "commands": ["get_clipboard", "set_clipboard"]
+    },
+    "text_ocr": {
+      "name": "Text/OCR",
+      "description": "Read text from UI or via OCR",
+      "commands": ["read_text", "ocr_region", "wait_for_text"]
+    },
+    "verification": {
+      "name": "Verification",
+      "description": "Screenshots and visual evidence",
+      "commands": ["screenshot", "element_screenshot"]
+    },
+    "display": {
+      "name": "Display",
+      "description": "Multi-monitor support",
+      "commands": ["list_monitors", "screenshot_monitor"]
+    },
+    "file_dialog": {
+      "name": "File Dialogs",
+      "description": "Automate file open/save dialogs",
+      "commands": ["file_dialog"]
+    },
+    "batch": {
+      "name": "Batch Operations",
+      "description": "Execute command sequences",
+      "commands": ["batch"]
+    },
+    "system": {
+      "name": "System",
+      "description": "Health and diagnostics",
+      "commands": ["health"]
+    },
+    "events": {
+      "name": "Events",
+      "description": "Subscribe to and manage UI events",
+      "commands": ["subscribe", "unsubscribe", "get_subscriptions"]
+    },
+    "diagnostics": {
+      "name": "Diagnostics",
+      "description": "Performance metrics and debugging",
+      "commands": ["get_metrics", "clear_metrics", "set_debug_mode", "get_cache_stats", "clear_cache"]
+    },
+    "human_behavior": {
+      "name": "Human-like Behavior",
+      "description": "Simulate natural human interaction patterns",
+      "commands": ["set_human_mode", "get_human_mode", "human_click", "human_type", "human_move"]
+    },
+    "token_efficient": {
+      "name": "Token-Efficient Commands",
+      "description": "Lean commands for AI agents to minimize token consumption",
+      "commands": ["element_exists", "get_interactive_elements", "get_window_summary", "describe_element", "get_element_brief", "fuzzy_find_element"]
+    },
+    "vision": {
+      "name": "Vision Commands",
+      "description": "OCR and visual detection for Flutter, Electron, and Canvas apps",
+      "commands": ["vision_click"]
+    },
+    "smart_fallback": {
+      "name": "Smart Fallback Commands",
+      "description": "Commands that automatically try FlaUI first, then vision/OCR. Best for mixed environments.",
+      "commands": ["smart_click", "smart_type"]
+    }
+  },
+  "error_codes": {
+    "MISSING_PARAM": { "meaning": "Required parameter not provided", "recovery": "Check command format" },
+    "WINDOW_NOT_FOUND": { "meaning": "Window selector didn't match", "recovery": "Run explore to refresh" },
+    "ELEMENT_NOT_FOUND": { "meaning": "UI element not found", "recovery": "Try explore_window or click_at" },
+    "PROCESS_NOT_FOUND": { "meaning": "Process not found", "recovery": "Check list_processes" },
+    "TIMEOUT": { "meaning": "Operation timed out", "recovery": "Increase timeout" },
+    "LAUNCH_FAILED": { "meaning": "Could not start application", "recovery": "Check path and permissions" },
+    "HOTKEY_FAILED": { "meaning": "Key combination failed", "recovery": "Check key names" },
+    "INVALID_KEY": { "meaning": "Unknown key name", "recovery": "Check supported keys" },
+    "CLIPBOARD_FAILED": { "meaning": "Clipboard operation failed", "recovery": "May be locked by another app" },
+    "NOT_SUPPORTED": { "meaning": "Operation not supported", "recovery": "Try alternative approach" },
+    "MOVE_FAILED": { "meaning": "Window move failed", "recovery": "Window may be locked" },
+    "RESIZE_FAILED": { "meaning": "Window resize failed", "recovery": "Window may not support resizing" },
+    "KILL_FAILED": { "meaning": "Process kill failed", "recovery": "May need elevated permissions" },
+    "OCR_FAILED": { "meaning": "OCR operation failed", "recovery": "Check Java bridge is running" },
+    "DRAG_FAILED": { "meaning": "Drag and drop failed", "recovery": "Elements may be off-screen" },
+    "UNKNOWN_ACTION": { "meaning": "Action not recognized", "recovery": "Check command spelling" },
+    "DIALOG_NOT_FOUND": { "meaning": "No file dialog detected", "recovery": "Ensure dialog is open" },
+    "INVALID_MONITOR": { "meaning": "Monitor index out of range", "recovery": "Run list_monitors" },
+    "INVALID_DIALOG_ACTION": { "meaning": "Unknown file_dialog action", "recovery": "Use: detect, set_path, set_filename, confirm, cancel" },
+    "BATCH_FAILED": { "meaning": "Batch command failed", "recovery": "Check individual results" },
+    "VISION_CLICK_FAILED": { "meaning": "Vision click could not find text", "recovery": "Check text is visible on screen" },
+    "FUZZY_FIND_FAILED": { "meaning": "Fuzzy search failed", "recovery": "Try different threshold or scope to window" },
+    "QUERY_FAILED": { "meaning": "Element query failed", "recovery": "Window may have changed state" },
+    "SMART_CLICK_FAILED": { "meaning": "Smart click failed with both FlaUI and vision", "recovery": "Check element is visible and text is correct" },
+    "SMART_TYPE_FAILED": { "meaning": "Smart type failed to find element", "recovery": "Verify element exists and is accessible" }
+  }
+}

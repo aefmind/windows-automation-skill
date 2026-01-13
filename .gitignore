@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node
+node_modules/
+
+# .NET
+bin/
+obj/
+
+# OS / tooling
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Embedded Python (should not be committed)
+src/python-embedded/
+
+# Misc
+.vscode/
+
+# Weird Windows reserved name that shouldn't exist as a file
+nul
