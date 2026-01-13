@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "version": "4.2",
-  "description": "Windows Desktop Automation Command Schemas - Lazy-loaded detailed documentation. v4.2: WinRT native OCR (3.2x faster)",
+  "version": "5.0.0",
+  "description": "Windows Desktop Automation Command Schemas. v5.0.0: Agent Vision mode, Win32 low-level commands, smart fallback with agent screenshots.",
   "commands": {
     "explore": {
       "category": "discovery",
@@ -463,6 +463,25 @@
       "example": { "action": "draw", "points": [[100, 100], [200, 200], [300, 100]], "button": "left", "duration": 500 },
       "returns": { "status": "success" },
       "tips": ["Automatically holds button at start and releases at end"]
+    },
+    "draw_bezier": {
+      "category": "mouse",
+      "description": "Hold mouse button, move along bezier curve, release. For smooth drawing.",
+      "schema": {
+        "action": { "type": "string", "const": "draw_bezier" },
+        "start": { "type": "array", "description": "[x, y] start point" },
+        "control1": { "type": "array", "description": "[x, y] first control point" },
+        "control2": { "type": "array", "description": "[x, y] second control point" },
+        "end": { "type": "array", "description": "[x, y] end point" },
+        "button": { "type": "string", "enum": ["left", "right", "middle"], "default": "left" },
+        "steps": { "type": "integer", "default": 50 },
+        "duration": { "type": "integer", "default": 300 }
+      },
+      "required": ["action", "start", "control1", "control2", "end"],
+      "optional": ["button", "steps", "duration"],
+      "example": { "action": "draw_bezier", "start": [100, 100], "control1": [150, 50], "control2": [250, 50], "end": [300, 100], "steps": 50, "duration": 500 },
+      "returns": { "status": "success" },
+      "tips": ["Like draw but with smooth bezier curve", "Great for signature simulation"]
     },
     "mouse_down": {
       "category": "mouse",
@@ -1146,14 +1165,16 @@
         "selector": { "type": "string", "description": "Element name, AutomationId, or visible text" },
         "text": { "type": "string", "description": "Alternative to selector - text to find" },
         "window": { "type": "string", "description": "Limit search to specific window" },
-        "vision_fallback": { "type": "boolean", "default": true, "description": "Enable vision fallback if FlaUI fails" }
+        "vision_fallback": { "type": "boolean", "default": true, "description": "Enable vision fallback if FlaUI fails" },
+        "agent_fallback": { "type": "boolean", "default": false, "description": "Return screenshot if all methods fail (for AI analysis)" },
+        "jpeg_quality": { "type": "integer", "default": 70, "description": "JPEG quality for agent_fallback screenshot" }
       },
       "required": ["action"],
       "required_one_of": ["selector", "text"],
-      "optional": ["window", "vision_fallback"],
-      "example": { "action": "smart_click", "selector": "Submit", "window": "MyApp" },
+      "optional": ["window", "vision_fallback", "agent_fallback", "jpeg_quality"],
+      "example": { "action": "smart_click", "selector": "Submit", "window": "MyApp", "agent_fallback": true },
       "returns": { "status": "success", "action": "smart_click", "method_used": "flaui", "x": 500, "y": 300 },
-      "tips": ["Use this for apps that mix standard and custom UI", "method_used shows which engine succeeded: flaui or vision"]
+      "tips": ["Use agent_fallback: true to get screenshot when element not found", "method_used shows which engine succeeded: flaui or vision"]
     },
     "smart_type": {
       "category": "smart_fallback",
@@ -1166,15 +1187,212 @@
         "value": { "type": "string", "description": "Alternative to input - text to type" },
         "window": { "type": "string", "description": "Limit search to specific window" },
         "clear": { "type": "boolean", "default": false, "description": "Clear existing text before typing (Ctrl+A)" },
-        "vision_fallback": { "type": "boolean", "default": true, "description": "Enable vision fallback if FlaUI fails" }
+        "vision_fallback": { "type": "boolean", "default": true, "description": "Enable vision fallback if FlaUI fails" },
+        "agent_fallback": { "type": "boolean", "default": false, "description": "Return screenshot if all methods fail (for AI analysis)" },
+        "jpeg_quality": { "type": "integer", "default": 70, "description": "JPEG quality for agent_fallback screenshot" }
       },
       "required": ["action"],
       "required_one_of": ["selector", "text"],
       "required_also": ["input", "value"],
-      "optional": ["window", "clear", "vision_fallback"],
-      "example": { "action": "smart_type", "selector": "Search", "input": "hello world", "window": "MyApp" },
+      "optional": ["window", "clear", "vision_fallback", "agent_fallback", "jpeg_quality"],
+      "example": { "action": "smart_type", "selector": "Search", "input": "hello world", "window": "MyApp", "agent_fallback": true },
       "returns": { "status": "success", "action": "smart_type", "method_used": "flaui", "typed": 11, "x": 500, "y": 300 },
-      "tips": ["Use clear: true to replace existing text", "method_used shows which engine succeeded"]
+      "tips": ["Use clear: true to replace existing text", "Use agent_fallback: true to get screenshot when element not found"]
+    },
+    "vision_screenshot": {
+      "category": "agent_vision",
+      "description": "Get optimized base64 JPEG screenshot for AI vision analysis.",
+      "schema": {
+        "action": { "type": "string", "const": "vision_screenshot" },
+        "max_width": { "type": "integer", "default": 1920, "description": "Maximum width (downscales if larger)" },
+        "jpeg_quality": { "type": "integer", "default": 70, "description": "JPEG quality (1-100)" }
+      },
+      "required": ["action"],
+      "optional": ["max_width", "jpeg_quality"],
+      "example": { "action": "vision_screenshot", "max_width": 1920, "jpeg_quality": 75 },
+      "returns": { "status": "success", "screenshot": { "data": "base64...", "width": 1920, "height": 1080, "size_bytes": 185000, "format": "jpeg" } },
+      "tips": ["Optimized for AI vision consumption", "Lower jpeg_quality = smaller size = fewer tokens"]
+    },
+    "vision_screenshot_region": {
+      "category": "agent_vision",
+      "description": "Get cropped region screenshot for token-efficient AI analysis.",
+      "schema": {
+        "action": { "type": "string", "const": "vision_screenshot_region" },
+        "x": { "type": "integer", "description": "Left edge X coordinate" },
+        "y": { "type": "integer", "description": "Top edge Y coordinate" },
+        "width": { "type": "integer", "description": "Region width" },
+        "height": { "type": "integer", "description": "Region height" },
+        "jpeg_quality": { "type": "integer", "default": 70, "description": "JPEG quality (1-100)" }
+      },
+      "required": ["action", "x", "y", "width", "height"],
+      "optional": ["jpeg_quality"],
+      "example": { "action": "vision_screenshot_region", "x": 100, "y": 200, "width": 400, "height": 300, "jpeg_quality": 75 },
+      "returns": { "status": "success", "screenshot": { "data": "base64...", "width": 400, "height": 300, "size_bytes": 25000, "format": "jpeg" } },
+      "tips": ["Much smaller than full screenshot", "Use for focused element analysis"]
+    },
+    "vision_config": {
+      "category": "agent_vision",
+      "description": "Get or set vision mode configuration (local/agent/auto).",
+      "schema": {
+        "action": { "type": "string", "const": "vision_config" },
+        "mode": { "type": "string", "enum": ["local", "agent", "auto"], "description": "Vision processing mode" },
+        "jpeg_quality": { "type": "integer", "description": "Default JPEG quality for agent mode" }
+      },
+      "required": ["action"],
+      "optional": ["mode", "jpeg_quality"],
+      "example": { "action": "vision_config", "mode": "agent", "jpeg_quality": 75 },
+      "returns": { "status": "success", "mode": "agent", "jpeg_quality": 75 },
+      "tips": ["local: Full OmniParser + OCR", "agent: Return screenshots for AI analysis", "auto: Try local first, include screenshot if limited"]
+    },
+    "vision_analyze_smart": {
+      "category": "agent_vision",
+      "description": "Smart analysis respecting current vision mode settings.",
+      "schema": {
+        "action": { "type": "string", "const": "vision_analyze_smart" },
+        "region": { "type": "object", "properties": { "x": { "type": "integer" }, "y": { "type": "integer" }, "width": { "type": "integer" }, "height": { "type": "integer" } } }
+      },
+      "required": ["action"],
+      "optional": ["region"],
+      "example": { "action": "vision_analyze_smart" },
+      "returns": { "status": "success", "mode": "agent", "screenshot": { "data": "base64...", "width": 1920, "height": 1080 } },
+      "tips": ["Behavior depends on vision_config mode setting", "In local mode returns detection/OCR results", "In agent mode returns screenshot"]
+    },
+    "vision_screenshot_cache_stats": {
+      "category": "agent_vision",
+      "description": "Get screenshot cache statistics for performance monitoring.",
+      "schema": {
+        "action": { "type": "string", "const": "vision_screenshot_cache_stats" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "vision_screenshot_cache_stats" },
+      "returns": { "status": "success", "cache_size": 3, "cache_ttl_seconds": 2.0, "max_entries": 5, "hit_rate": 0.75 },
+      "tips": ["Use to monitor cache effectiveness", "Adjust TTL based on your use case"]
+    },
+    "vision_screenshot_cache_clear": {
+      "category": "agent_vision",
+      "description": "Clear screenshot cache to force fresh captures.",
+      "schema": {
+        "action": { "type": "string", "const": "vision_screenshot_cache_clear" }
+      },
+      "required": ["action"],
+      "optional": [],
+      "example": { "action": "vision_screenshot_cache_clear" },
+      "returns": { "status": "success", "cleared_entries": 3 },
+      "tips": ["Use after significant UI changes", "Forces next screenshot to be fresh"]
+    },
+    "vision_stream": {
+      "category": "agent_vision",
+      "description": "Get WebSocket URL for real-time screenshot streaming.",
+      "schema": {
+        "action": { "type": "string", "const": "vision_stream" },
+        "fps": { "type": "integer", "default": 5, "description": "Frames per second" },
+        "quality": { "type": "integer", "default": 70, "description": "JPEG quality" }
+      },
+      "required": ["action"],
+      "optional": ["fps", "quality"],
+      "example": { "action": "vision_stream", "fps": 5, "quality": 70 },
+      "returns": { "status": "success", "websocket_url": "ws://127.0.0.1:5001/vision/stream?fps=5&quality=70" },
+      "tips": ["Connect to WebSocket for continuous frames", "Use for real-time monitoring or video capture"]
+    },
+    "scroll_sendinput": {
+      "category": "win32",
+      "description": "Low-level scroll using Win32 SendInput (bypasses UI Automation).",
+      "schema": {
+        "action": { "type": "string", "const": "scroll_sendinput" },
+        "delta": { "type": "integer", "description": "Scroll amount (-120 = down, 120 = up)" },
+        "x": { "type": "integer", "description": "X coordinate for scroll" },
+        "y": { "type": "integer", "description": "Y coordinate for scroll" }
+      },
+      "required": ["action", "delta"],
+      "optional": ["x", "y"],
+      "example": { "action": "scroll_sendinput", "delta": -120, "x": 500, "y": 400 },
+      "returns": { "status": "success" },
+      "tips": ["Use when regular scroll doesn't work", "Negative delta = scroll down, positive = scroll up"]
+    },
+    "type_sendinput": {
+      "category": "win32",
+      "description": "Type Unicode text via Win32 SendInput (direct keyboard events).",
+      "schema": {
+        "action": { "type": "string", "const": "type_sendinput" },
+        "text": { "type": "string", "description": "Text to type (supports Unicode/emoji)" }
+      },
+      "required": ["action", "text"],
+      "optional": [],
+      "example": { "action": "type_sendinput", "text": "Hello World! 🎉" },
+      "returns": { "status": "success" },
+      "tips": ["Supports full Unicode including emoji", "Use when regular type doesn't work"]
+    },
+    "set_always_on_top": {
+      "category": "win32",
+      "description": "Pin or unpin window to always stay on top using SetWindowPos.",
+      "schema": {
+        "action": { "type": "string", "const": "set_always_on_top" },
+        "selector": { "type": "string", "description": "Window title or AutomationId" },
+        "enable": { "type": "boolean", "description": "True to pin on top, false to unpin" }
+      },
+      "required": ["action", "selector", "enable"],
+      "optional": [],
+      "example": { "action": "set_always_on_top", "selector": "Notepad", "enable": true },
+      "returns": { "status": "success" },
+      "tips": ["Useful for keeping reference windows visible", "Window stays on top until disabled or closed"]
+    },
+    "flash_window": {
+      "category": "win32",
+      "description": "Flash window taskbar button and/or caption to get user attention.",
+      "schema": {
+        "action": { "type": "string", "const": "flash_window" },
+        "selector": { "type": "string", "description": "Window title or AutomationId" },
+        "count": { "type": "integer", "default": 3, "description": "Number of flashes" }
+      },
+      "required": ["action", "selector"],
+      "optional": ["count"],
+      "example": { "action": "flash_window", "selector": "Notepad", "count": 5 },
+      "returns": { "status": "success" },
+      "tips": ["Use to alert user to completed operations", "Flashes taskbar and window caption"]
+    },
+    "set_window_opacity": {
+      "category": "win32",
+      "description": "Set window transparency level (0-255 alpha).",
+      "schema": {
+        "action": { "type": "string", "const": "set_window_opacity" },
+        "selector": { "type": "string", "description": "Window title or AutomationId" },
+        "alpha": { "type": "integer", "description": "Opacity value (0=invisible, 255=opaque)" }
+      },
+      "required": ["action", "selector", "alpha"],
+      "optional": [],
+      "example": { "action": "set_window_opacity", "selector": "Paint", "alpha": 180 },
+      "returns": { "status": "success" },
+      "tips": ["0 = fully transparent, 255 = fully opaque", "Useful for overlay windows"]
+    },
+    "fast_screenshot": {
+      "category": "win32",
+      "description": "Fast GDI BitBlt screenshot (faster than WinForms method).",
+      "schema": {
+        "action": { "type": "string", "const": "fast_screenshot" },
+        "region": { "type": "array", "items": { "type": "integer" }, "description": "[x, y, width, height] or omit for full screen" },
+        "format": { "type": "string", "enum": ["png", "jpeg", "bmp"], "default": "png" },
+        "filename": { "type": "string", "description": "Output filename" }
+      },
+      "required": ["action"],
+      "optional": ["region", "format", "filename"],
+      "example": { "action": "fast_screenshot", "region": [0, 0, 800, 600], "format": "png" },
+      "returns": { "status": "success", "filename": "screenshot.png", "width": 800, "height": 600 },
+      "tips": ["Faster than regular screenshot for high-frequency captures", "Use region to capture specific area"]
+    },
+    "clipboard_image": {
+      "category": "win32",
+      "description": "Copy image to or from clipboard.",
+      "schema": {
+        "action": { "type": "string", "const": "clipboard_image" },
+        "operation": { "type": "string", "enum": ["get", "set"], "description": "Get image from or set image to clipboard" },
+        "filename": { "type": "string", "description": "File path for get (output) or set (input)" }
+      },
+      "required": ["action", "operation"],
+      "optional": ["filename"],
+      "example": { "action": "clipboard_image", "operation": "set", "filename": "image.png" },
+      "returns": { "status": "success", "filename": "clipboard_image.png" },
+      "tips": ["get: saves clipboard image to file", "set: loads image file to clipboard"]
     }
   },
   "categories": {
@@ -1196,7 +1414,7 @@
     "mouse": {
       "name": "Mouse Actions",
       "description": "Mouse clicks, movement, and gestures",
-      "commands": ["click", "double_click", "right_click", "long_press", "click_at", "mouse_move", "drag_and_drop", "scroll", "mouse_path", "mouse_bezier", "draw", "mouse_down", "mouse_up", "click_relative", "get_cursor_position", "hover", "mouse_move_eased", "swipe"]
+      "commands": ["click", "double_click", "right_click", "long_press", "click_at", "mouse_move", "drag_and_drop", "scroll", "mouse_path", "mouse_bezier", "draw", "draw_bezier", "mouse_down", "mouse_up", "click_relative", "get_cursor_position", "hover", "mouse_move_eased", "swipe"]
     },
     "keyboard": {
       "name": "Keyboard Actions",
@@ -1205,8 +1423,8 @@
     },
     "clipboard": {
       "name": "Clipboard",
-      "description": "Read and write clipboard",
-      "commands": ["get_clipboard", "set_clipboard"]
+      "description": "Read and write clipboard (text and images)",
+      "commands": ["get_clipboard", "set_clipboard", "clipboard_image"]
     },
     "text_ocr": {
       "name": "Text/OCR",
@@ -1267,6 +1485,16 @@
       "name": "Smart Fallback Commands",
       "description": "Commands that automatically try FlaUI first, then vision/OCR. Best for mixed environments.",
       "commands": ["smart_click", "smart_type"]
+    },
+    "agent_vision": {
+      "name": "Agent Vision Commands",
+      "description": "Screenshot and configuration commands for AI agent vision analysis",
+      "commands": ["vision_screenshot", "vision_screenshot_region", "vision_config", "vision_analyze_smart", "vision_screenshot_cache_stats", "vision_screenshot_cache_clear", "vision_stream"]
+    },
+    "win32": {
+      "name": "Win32 Low-Level Commands",
+      "description": "Direct Win32 API calls for specialized operations",
+      "commands": ["scroll_sendinput", "type_sendinput", "set_always_on_top", "flash_window", "set_window_opacity", "fast_screenshot", "clipboard_image"]
     }
   },
   "error_codes": {

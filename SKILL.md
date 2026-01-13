@@ -1,7 +1,7 @@
 ---
 name: windows-desktop-automation
 description: AI agent capability for Windows desktop GUI automation via multi-engine orchestrator.
-version: 4.4.0
+version: 5.0.0
 ---
 
 # Windows Desktop Automation

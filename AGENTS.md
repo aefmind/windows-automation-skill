@@ -143,7 +143,23 @@ src/python-embedded/  # Embedded Python (not used)
 1. Add handler method in `Program.cs`
 2. Add case in the main switch statement
 3. Update `SKILL.md` with command documentation
-4. Add test case in `scripts/test-commands.cjs` (optional)
+4. Update `docs/command-schemas.json` with the new command schema
+5. Add test case in `scripts/test-commands.cjs` (optional)
+
+### Keeping Documentation in Sync
+
+When modifying commands, ensure these files stay synchronized:
+
+| File | What to Update |
+|------|----------------|
+| `SKILL.md` | Command reference tables, version number |
+| `docs/command-schemas.json` | Full JSON schema, version number, categories |
+| `README.md` | User-facing docs if behavior changes |
+
+**Version Numbers**: When adding new commands or significant features:
+1. Update `version` in `SKILL.md` front matter
+2. Update `version` in `docs/command-schemas.json`
+3. Update `description` in `docs/command-schemas.json` to mention new features
 
 ### Common Patterns in Program.cs
 
