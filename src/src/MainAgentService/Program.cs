@@ -4908,52 +4908,39 @@ namespace MainAgentService
 
     /// <summary>
     /// Returns WebSocket URL for real-time screenshot streaming.
-    /// The agent connects to this WebSocket to receive continuous screenshot frames.
     /// </summary>
     private static void HandleVisionStream(JsonElement command)
     {
         try
         {
-            // Extract optional parameters for streaming configuration
-            int fps = 5;
-            int? quality = null;
-            int? maxWidth = null;
-            int? maxHeight = null;
+            // Extract parameters with defaults
+            int fps = GetIntOrDefault(command, "fps", 5);
+            int quality = GetIntOrDefault(command, "quality", 70);
+            int maxWidth = GetIntOrDefault(command, "max_width", 1920);
+            int maxHeight = GetIntOrDefault(command, "max_height", 1080);
 
-            if (command.TryGetProperty("fps", out var fpsElement))
-                fps = fpsElement.GetInt32();
-            if (command.TryGetProperty("quality", out var qualityElement))
-                quality = qualityElement.GetInt32();
-            if (command.TryGetProperty("max_width", out var maxWidthElement))
-                maxWidth = maxWidthElement.GetInt32();
-            if (command.TryGetProperty("max_height", out var maxHeightElement))
-                maxHeight = maxHeightElement.GetInt32();
+            var wsUrl = $"ws://localhost:5001/vision/stream?fps={fps}&quality={quality}&max_width={maxWidth}&max_height={maxHeight}";
 
-            // Build query parameters
-            var queryParams = new List<string> { $"fps={fps}" };
-            if (quality.HasValue) queryParams.Add($"quality={quality.Value}");
-            if (maxWidth.HasValue) queryParams.Add($"max_width={maxWidth.Value}");
-            if (maxHeight.HasValue) queryParams.Add($"max_height={maxHeight.Value}");
-
-            var wsUrl = $"ws://localhost:5001/vision/stream?{string.Join("&", queryParams)}";
-
-            var result = new
+            Console.WriteLine(JsonSerializer.Serialize(new
             {
                 status = "success",
                 websocket_url = wsUrl,
-                fps = fps,
-                quality = quality ?? 70,
-                max_width = maxWidth ?? 1920,
-                max_height = maxHeight ?? 1080,
-                instructions = "Connect to the WebSocket URL to receive real-time JPEG screenshot frames as base64 strings."
-            };
-
-            Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions));
+                fps,
+                quality,
+                max_width = maxWidth,
+                max_height = maxHeight,
+                instructions = "Connect to WebSocket URL to receive JPEG frames as base64."
+            }, JsonOptions));
         }
         catch (Exception ex)
         {
             WriteError("VISION_STREAM_FAILED", ex.Message);
         }
+    }
+
+    private static int GetIntOrDefault(JsonElement command, string property, int defaultValue)
+    {
+        return command.TryGetProperty(property, out var element) ? element.GetInt32() : defaultValue;
     }
 
     // ==================== SMART FALLBACK CHAIN (v4.0) ====================
