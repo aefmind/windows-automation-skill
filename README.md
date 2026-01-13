@@ -2,17 +2,25 @@
 
 This project provides a robust, hybrid automation engine for Windows, designed to be driven by an AI agent or external scripts. It uses a 2-engine architecture to ensure high compatibility across modern (UWP/WPF), legacy (Win32), and visual-only applications (Flutter, Electron, Canvas).
 
-## Version 4.3.2 - Agent Vision Enhancements
+## Version 5.0.0 - Win32 Low-Level Commands
 
-**New in v4.3.2:**
-- **Screenshot Caching** - LRU cache with TTL expiration for rapid successive operations
-- **Agent Vision Commands** - 6 new JSON commands for AI agent vision workflows
+**New in v5.0.0:**
+- **Win32 Low-Level Commands** - 7 new commands using direct Win32 API calls
+  - `scroll_sendinput` - Low-level scroll bypassing UI Automation
+  - `type_sendinput` - Unicode typing including emoji via SendInput
+  - `set_always_on_top` - Pin/unpin windows on top
+  - `flash_window` - Flash taskbar/caption for attention
+  - `set_window_opacity` - Window transparency (0-255 alpha)
+  - `fast_screenshot` - Fast GDI BitBlt screenshot
+  - `clipboard_image` - Copy images to/from clipboard
+- **draw_bezier** - Draw smooth bezier curves in drawing applications
+
+**v4.3 Features:**
+- **Agent Vision Commands** - 7 JSON commands for AI agent vision workflows
+- **Screenshot Caching** - LRU cache with TTL for rapid operations
 - **Smart Fallback with Screenshot** - `agent_fallback` param returns screenshot when element not found
-
-**New in v4.3:**
-- **Simplified to 2-Engine Architecture** - Removed SikuliX/Java Bridge dependency
+- **Simplified 2-Engine Architecture** - Removed SikuliX/Java Bridge dependency
 - **All OCR via WinRT** - 3.2x faster than previous PowerShell-based OCR
-- **Reduced footprint** - No Java runtime required, ~50MB smaller
 
 **v4.0 Features:**
 - **Vision Layer** - OmniParser ONNX + Windows OCR for apps where UI Automation fails
@@ -218,6 +226,17 @@ node scripts/test-commands.cjs
 | `vision_screenshot_cache_stats` | Get screenshot cache statistics |
 | `vision_screenshot_cache_clear` | Clear screenshot cache |
 | `vision_stream` | Get WebSocket URL for real-time screenshot streaming |
+
+### Win32 Low-Level Commands (v5.0)
+| Command | Description |
+|---------|-------------|
+| `scroll_sendinput` | Low-level scroll using Win32 SendInput (bypasses UI Automation) |
+| `type_sendinput` | Type Unicode text including emoji via SendInput |
+| `set_always_on_top` | Pin/unpin window to always stay on top |
+| `flash_window` | Flash window taskbar/caption for user attention |
+| `set_window_opacity` | Set window transparency (0-255 alpha) |
+| `fast_screenshot` | Fast GDI BitBlt screenshot |
+| `clipboard_image` | Copy image to/from clipboard |
 
 ### Window Management
 | Command | Description |
@@ -489,6 +508,36 @@ node scripts/send-command.cjs '{"action":"vision_stream", "fps":5, "quality":70}
 node scripts/test-stream.cjs --fps 10 --duration 5 --save
 ```
 
+### New v5.0 Commands
+
+```bash
+# Win32 Low-Level Commands - bypass UI Automation for maximum compatibility
+
+# Low-level scroll (works where scroll command fails)
+node scripts/send-command.cjs '{"action":"scroll_sendinput", "delta":-120, "x":500, "y":400}'
+
+# Type Unicode text including emoji
+node scripts/send-command.cjs '{"action":"type_sendinput", "text":"Hello 🎉 World 🌍"}'
+
+# Pin window always on top
+node scripts/send-command.cjs '{"action":"set_always_on_top", "selector":"Notepad", "enable":true}'
+
+# Flash window for attention
+node scripts/send-command.cjs '{"action":"flash_window", "selector":"Notepad", "count":5}'
+
+# Set window transparency (0=invisible, 255=opaque)
+node scripts/send-command.cjs '{"action":"set_window_opacity", "selector":"Paint", "alpha":180}'
+
+# Fast GDI screenshot (faster than standard screenshot)
+node scripts/send-command.cjs '{"action":"fast_screenshot", "region":[0,0,800,600], "format":"png"}'
+
+# Copy image to clipboard
+node scripts/send-command.cjs '{"action":"clipboard_image", "operation":"set", "filename":"image.png"}'
+
+# Get image from clipboard
+node scripts/send-command.cjs '{"action":"clipboard_image", "operation":"get", "filename":"from_clipboard.png"}'
+```
+
 ## Bridge API Reference
 
 ### Python Bridge (pywinauto + Vision) - Port 5001
@@ -695,6 +744,7 @@ skill/windows-desktop-automation/
 
 ## Version History
 
+- **v5.0.0**: Win32 Low-Level Commands - 7 new commands using direct Win32 API (`scroll_sendinput`, `type_sendinput`, `set_always_on_top`, `flash_window`, `set_window_opacity`, `fast_screenshot`, `clipboard_image`) for maximum compatibility bypassing UI Automation
 - **v4.3.2**: Agent Vision Enhancements - Screenshot caching with LRU/TTL (ScreenshotCache class), 7 new JSON commands for agent vision workflows (vision_screenshot, vision_screenshot_region, vision_config, vision_analyze_smart, vision_screenshot_cache_stats, vision_screenshot_cache_clear, vision_stream), WebSocket streaming for real-time screenshots, smart_click/smart_type agent_fallback parameter returns screenshot when element not found
 - **v4.3**: Architecture Simplification - Removed SikuliX/Java Bridge, all OCR via Python bridge WinRT (3.2x faster), no Java runtime required
 - **v4.2**: Agent Vision Mode - New endpoints (`/vision/screenshot`, `/vision/screenshot_region`, `/vision/config`, `/vision/analyze_or_screenshot`) for AI agent vision. Supports local/agent/auto modes with configurable JPEG compression. OmniParser detection always uses tiling (no global resize)
