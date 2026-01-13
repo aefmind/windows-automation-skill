@@ -2138,6 +2138,9 @@ namespace MainAgentService
                 case "draw":
                     await HandleDraw(command);
                     break;
+                case "draw_bezier":
+                    await HandleDrawBezier(command);
+                    break;
                 case "mouse_down":
                     HandleMouseDown(command);
                     break;
@@ -2665,9 +2668,10 @@ namespace MainAgentService
                 Mouse.MoveTo(points[0]);
                 await Task.Delay(50);
 
-                // Press mouse button
+                // Press mouse button and wait for it to register
                 var mouseButton = ParseMouseButton(button);
                 Mouse.Down(mouseButton);
+                await Task.Delay(30); // Critical: allow button press to register
 
                 // Move along path
                 var totalSteps = Math.Max(points.Count * 10, 20);
@@ -2680,6 +2684,9 @@ namespace MainAgentService
                     await Task.Delay(delayPerStep);
                 }
 
+                // Small delay before release to ensure final position registers
+                await Task.Delay(20);
+                
                 // Release mouse button
                 Mouse.Up(mouseButton);
 
@@ -2693,6 +2700,73 @@ namespace MainAgentService
             catch (Exception ex)
             {
                 WriteError("DRAW_FAILED", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Draws along a cubic bezier curve (mouse down, bezier path, mouse up)
+        /// </summary>
+        private static async Task HandleDrawBezier(JObject command)
+        {
+            var start = ParsePoint(command["start"]);
+            var control1 = ParsePoint(command["control1"]);
+            var control2 = ParsePoint(command["control2"]);
+            var end = ParsePoint(command["end"]);
+            var steps = command["steps"]?.Value<int>() ?? 50;
+            var durationMs = command["duration"]?.Value<int>() ?? 500;
+            var button = command["button"]?.ToString()?.ToLower() ?? "left";
+
+            if (start == null || end == null)
+            {
+                WriteError("MISSING_PARAM", "Missing 'start' or 'end' point");
+                return;
+            }
+
+            // If control points not specified, create smooth curve
+            control1 ??= start;
+            control2 ??= end;
+
+            try
+            {
+                // Move to start position
+                Mouse.MoveTo(start.Value);
+                await Task.Delay(50);
+
+                // Press mouse button and wait for it to register
+                var mouseButton = ParseMouseButton(button);
+                Mouse.Down(mouseButton);
+                await Task.Delay(30);
+
+                // Move along bezier curve
+                var delayPerStep = Math.Max(1, durationMs / steps);
+                for (int i = 0; i <= steps; i++)
+                {
+                    double t = (double)i / steps;
+                    var point = CalculateBezierPoint(t, start.Value, control1.Value, control2.Value, end.Value);
+                    Mouse.MoveTo(point);
+                    await Task.Delay(delayPerStep);
+                }
+
+                // Small delay before release
+                await Task.Delay(20);
+
+                // Release mouse button
+                Mouse.Up(mouseButton);
+
+                WriteSuccess("draw_bezier", new
+                {
+                    start = new { x = start.Value.X, y = start.Value.Y },
+                    end = new { x = end.Value.X, y = end.Value.Y },
+                    control1 = new { x = control1.Value.X, y = control1.Value.Y },
+                    control2 = new { x = control2.Value.X, y = control2.Value.Y },
+                    steps,
+                    button,
+                    duration_ms = durationMs
+                });
+            }
+            catch (Exception ex)
+            {
+                WriteError("DRAW_BEZIER_FAILED", ex.Message);
             }
         }
 

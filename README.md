@@ -253,6 +253,7 @@ node scripts/test-commands.cjs
 | `mouse_path` | Move mouse along waypoints (NEW v3.3) |
 | `mouse_bezier` | Move mouse along bezier curve (NEW v3.3) |
 | `draw` | Hold, move along path, release (NEW v3.3) |
+| `draw_bezier` | Hold, move along bezier curve, release (NEW) |
 | `mouse_down` | Press and hold mouse button (NEW v3.3) |
 | `mouse_up` | Release mouse button (NEW v3.3) |
 | `click_relative` | Click relative to element anchor (NEW v3.3) |
@@ -381,6 +382,9 @@ node scripts/send-command.cjs '{"action":"mouse_bezier", "start":[100,100], "con
 
 # Draw (hold + move + release) - for drawing applications
 node scripts/send-command.cjs '{"action":"draw", "points":[[100,100],[200,200],[300,100]], "button":"left", "duration":500}'
+
+# Draw bezier curve (hold + bezier path + release) - smooth curves in drawing apps
+node scripts/send-command.cjs '{"action":"draw_bezier", "start":[100,100], "control1":[150,50], "control2":[250,150], "end":[300,100], "button":"left", "duration":500}'
 
 # Mouse hold/release
 node scripts/send-command.cjs '{"action":"mouse_down", "button":"left", "x":100, "y":200}'

@@ -64,7 +64,7 @@ node scripts/get-command-help.cjs --category mouse   # By category
 | `list_processes` | List running processes, filter by name |
 | `kill_process` | Kill by PID or name, force option |
 
-### Mouse Actions (18)
+### Mouse Actions (19)
 | Command | Description |
 |---------|-------------|
 | `click` | Click element by selector |
@@ -82,6 +82,7 @@ node scripts/get-command-help.cjs --category mouse   # By category
 | `mouse_path` | Move through array of waypoints |
 | `mouse_bezier` | Move along cubic bezier curve |
 | `draw` | Hold button, move path, release (for drawing apps) |
+| `draw_bezier` | Hold button, bezier curve path, release |
 | `mouse_down` | Press and hold button |
 | `mouse_up` | Release held button |
 | `get_cursor_position` | Get current cursor x,y |
