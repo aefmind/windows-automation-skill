@@ -2141,6 +2141,9 @@ namespace MainAgentService
                 case "draw_bezier":
                     await HandleDrawBezier(command);
                     break;
+                case "draw_sendinput":
+                    await HandleDrawSendInput(command);
+                    break;
                 case "mouse_down":
                     HandleMouseDown(command);
                     break;
@@ -2286,6 +2289,28 @@ namespace MainAgentService
                     break;
                 case "vision_stream":
                     HandleVisionStream(command);
+                    break;
+                // v4.4 Win32 Low-Level Commands
+                case "scroll_sendinput":
+                    HandleScrollSendInput(command);
+                    break;
+                case "type_sendinput":
+                    await HandleTypeSendInput(command);
+                    break;
+                case "set_always_on_top":
+                    HandleSetAlwaysOnTop(command);
+                    break;
+                case "flash_window":
+                    HandleFlashWindow(command);
+                    break;
+                case "set_window_opacity":
+                    HandleSetWindowOpacity(command);
+                    break;
+                case "fast_screenshot":
+                    HandleFastScreenshot(command);
+                    break;
+                case "clipboard_image":
+                    HandleClipboardImage(command);
                     break;
                 // Utility commands
                 case "health":
@@ -2767,6 +2792,83 @@ namespace MainAgentService
             catch (Exception ex)
             {
                 WriteError("DRAW_BEZIER_FAILED", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Draws using Win32 SendInput API for low-level mouse simulation.
+        /// This bypasses FlaUI and sends input directly to the kernel input queue.
+        /// </summary>
+        private static async Task HandleDrawSendInput(JObject command)
+        {
+            var pointsArray = command["points"] as JArray;
+            var pathArray = command["path"] as JArray;
+            var button = command["button"]?.ToString()?.ToLower() ?? "left";
+            var durationMs = command["duration"]?.Value<int>() ?? 500;
+
+            var actualPoints = pointsArray ?? pathArray;
+
+            if (actualPoints == null || actualPoints.Count < 2)
+            {
+                WriteError("MISSING_PARAM", "Missing or invalid 'points' or 'path' array (need at least 2 points)");
+                return;
+            }
+
+            try
+            {
+                var points = new List<System.Drawing.Point>();
+                foreach (var pt in actualPoints)
+                {
+                    var point = ParsePoint(pt);
+                    if (point.HasValue)
+                    {
+                        points.Add(point.Value);
+                    }
+                }
+
+                if (points.Count < 2)
+                {
+                    WriteError("INVALID_PARAM", "Could not parse at least 2 valid points");
+                    return;
+                }
+
+                // Move to first point using SendInput
+                SendInputMouseMove(points[0].X, points[0].Y);
+                await Task.Delay(50);
+
+                // Press mouse button using SendInput
+                SendInputMouseDown(button);
+                await Task.Delay(50); // Longer delay for button registration
+
+                // Move along path with interpolation
+                var totalSteps = Math.Max(points.Count * 10, 20);
+                var delayPerStep = Math.Max(5, durationMs / totalSteps);
+                var interpolatedPoints = InterpolatePoints(points, totalSteps);
+
+                foreach (var point in interpolatedPoints)
+                {
+                    SendInputMouseMove(point.X, point.Y);
+                    await Task.Delay(delayPerStep);
+                }
+
+                // Delay before release
+                await Task.Delay(50);
+                
+                // Release mouse button using SendInput
+                SendInputMouseUp(button);
+
+                WriteSuccess("draw_sendinput", new
+                {
+                    points_count = points.Count,
+                    total_steps = totalSteps,
+                    button,
+                    duration_ms = durationMs,
+                    method = "Win32 SendInput"
+                });
+            }
+            catch (Exception ex)
+            {
+                WriteError("DRAW_SENDINPUT_FAILED", ex.Message);
             }
         }
 
@@ -3745,6 +3847,852 @@ namespace MainAgentService
             uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
         
         private const uint SMTO_ABORTIFHUNG = 0x0002;
+
+        // ==================== SendInput Win32 API ====================
+        
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+        [DllImport("user32.dll")]
+        private static extern int GetSystemMetrics(int nIndex);
+
+        private const int SM_CXSCREEN = 0;
+        private const int SM_CYSCREEN = 1;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT
+        {
+            public uint type;
+            public MOUSEKEYBDHARDWAREINPUT mkhi;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct MOUSEKEYBDHARDWAREINPUT
+        {
+            [FieldOffset(0)]
+            public MOUSEINPUT mi;
+            [FieldOffset(0)]
+            public KEYBDINPUT ki;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MOUSEINPUT
+        {
+            public int dx;
+            public int dy;
+            public uint mouseData;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        private const uint INPUT_MOUSE = 0;
+        private const uint MOUSEEVENTF_MOVE = 0x0001;
+        private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+        private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+        private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
+        private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
+        private const uint MOUSEEVENTF_MIDDLEDOWN = 0x0020;
+        private const uint MOUSEEVENTF_MIDDLEUP = 0x0040;
+        private const uint MOUSEEVENTF_ABSOLUTE = 0x8000;
+        private const uint MOUSEEVENTF_WHEEL = 0x0800;
+        private const uint MOUSEEVENTF_HWHEEL = 0x01000;
+
+        // Keyboard input constants
+        private const uint INPUT_KEYBOARD = 1;
+        private const uint KEYEVENTF_KEYUP = 0x0002;
+        private const uint KEYEVENTF_UNICODE = 0x0004;
+        private const uint KEYEVENTF_SCANCODE = 0x0008;
+
+        // Virtual key code conversion
+        [DllImport("user32.dll")]
+        private static extern short VkKeyScan(char ch);
+
+        [DllImport("user32.dll")]
+        private static extern uint MapVirtualKey(uint uCode, uint uMapType);
+
+        private const uint MAPVK_VK_TO_VSC = 0;
+
+        // ==================== Window Management Win32 APIs ====================
+        // Note: SetWindowPos is already declared above (line ~1017)
+
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOACTIVATE = 0x0010;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+
+        // FlashWindowEx
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool FlashWindowEx(ref FLASHWINFO pwfi);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct FLASHWINFO
+        {
+            public uint cbSize;
+            public IntPtr hwnd;
+            public uint dwFlags;
+            public uint uCount;
+            public uint dwTimeout;
+        }
+
+        private const uint FLASHW_STOP = 0;
+        private const uint FLASHW_CAPTION = 1;
+        private const uint FLASHW_TRAY = 2;
+        private const uint FLASHW_ALL = 3;
+        private const uint FLASHW_TIMER = 4;
+        private const uint FLASHW_TIMERNOFG = 12;
+
+        // Window opacity/transparency
+        [DllImport("user32.dll")]
+        private static extern int SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_LAYERED = 0x80000;
+        private const uint LWA_ALPHA = 0x2;
+        private const uint LWA_COLORKEY = 0x1;
+
+        // ==================== GDI Screenshot APIs ====================
+
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateDC(string lpszDriver, string? lpszDevice, string? lpszOutput, IntPtr lpInitData);
+
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int nWidth, int nHeight);
+
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr SelectObject(IntPtr hdc, IntPtr hgdiobj);
+
+        [DllImport("gdi32.dll")]
+        private static extern bool BitBlt(IntPtr hdcDest, int nXDest, int nYDest, int nWidth, int nHeight, IntPtr hdcSrc, int nXSrc, int nYSrc, uint dwRop);
+
+        [DllImport("gdi32.dll")]
+        private static extern bool DeleteObject(IntPtr hObject);
+
+        [DllImport("gdi32.dll")]
+        private static extern bool DeleteDC(IntPtr hdc);
+
+        private const uint SRCCOPY = 0x00CC0020;
+
+        // ==================== Clipboard APIs ====================
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool OpenClipboard(IntPtr hWndNewOwner);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool CloseClipboard();
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool EmptyClipboard();
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetClipboardData(uint uFormat, IntPtr hMem);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr GetClipboardData(uint uFormat);
+
+        private const uint CF_BITMAP = 2;
+        private const uint CF_DIB = 8;
+
+        // ==================== FindWindow for handle lookup ====================
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string? lpszClass, string? lpszWindow);
+
+        // Get window handle from FlaUI element
+        private static IntPtr GetWindowHandle(string selector)
+        {
+            // Try to find element via FlaUI first
+            var element = FindElement(selector);
+            if (element != null)
+            {
+                // Get the window containing this element
+                var window = element;
+                while (window.Parent != null && window.ControlType != FlaUI.Core.Definitions.ControlType.Window)
+                {
+                    window = window.Parent;
+                }
+                if (window.Properties.NativeWindowHandle.IsSupported)
+                {
+                    return window.Properties.NativeWindowHandle.Value;
+                }
+            }
+
+            // Fallback: try FindWindow with title
+            var hwnd = FindWindow(null, selector);
+            if (hwnd != IntPtr.Zero) return hwnd;
+
+            // Try partial match via EnumWindows
+            return IntPtr.Zero;
+        }
+
+        /// <summary>
+        /// Converts screen coordinates to normalized absolute coordinates for SendInput
+        /// </summary>
+        private static (int dx, int dy) ToAbsoluteCoords(int x, int y)
+        {
+            int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+            int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+            int dx = (x * 65535) / screenWidth;
+            int dy = (y * 65535) / screenHeight;
+            return (dx, dy);
+        }
+
+        /// <summary>
+        /// Sends a mouse move event using SendInput
+        /// </summary>
+        private static void SendInputMouseMove(int x, int y)
+        {
+            var (dx, dy) = ToAbsoluteCoords(x, y);
+            var input = new INPUT
+            {
+                type = INPUT_MOUSE,
+                mkhi = new MOUSEKEYBDHARDWAREINPUT
+                {
+                    mi = new MOUSEINPUT
+                    {
+                        dx = dx,
+                        dy = dy,
+                        dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE,
+                        mouseData = 0,
+                        time = 0,
+                        dwExtraInfo = IntPtr.Zero
+                    }
+                }
+            };
+            SendInput(1, new[] { input }, Marshal.SizeOf(typeof(INPUT)));
+        }
+
+        /// <summary>
+        /// Sends a mouse button down event using SendInput
+        /// </summary>
+        private static void SendInputMouseDown(string button = "left")
+        {
+            uint flags = button.ToLower() switch
+            {
+                "right" => MOUSEEVENTF_RIGHTDOWN,
+                "middle" => MOUSEEVENTF_MIDDLEDOWN,
+                _ => MOUSEEVENTF_LEFTDOWN
+            };
+            
+            var input = new INPUT
+            {
+                type = INPUT_MOUSE,
+                mkhi = new MOUSEKEYBDHARDWAREINPUT
+                {
+                    mi = new MOUSEINPUT
+                    {
+                        dwFlags = flags,
+                        mouseData = 0,
+                        time = 0,
+                        dwExtraInfo = IntPtr.Zero
+                    }
+                }
+            };
+            SendInput(1, new[] { input }, Marshal.SizeOf(typeof(INPUT)));
+        }
+
+        /// <summary>
+        /// Sends a mouse button up event using SendInput
+        /// </summary>
+        private static void SendInputMouseUp(string button = "left")
+        {
+            uint flags = button.ToLower() switch
+            {
+                "right" => MOUSEEVENTF_RIGHTUP,
+                "middle" => MOUSEEVENTF_MIDDLEUP,
+                _ => MOUSEEVENTF_LEFTUP
+            };
+            
+            var input = new INPUT
+            {
+                type = INPUT_MOUSE,
+                mkhi = new MOUSEKEYBDHARDWAREINPUT
+                {
+                    mi = new MOUSEINPUT
+                    {
+                        dwFlags = flags,
+                        mouseData = 0,
+                        time = 0,
+                        dwExtraInfo = IntPtr.Zero
+                    }
+                }
+            };
+            SendInput(1, new[] { input }, Marshal.SizeOf(typeof(INPUT)));
+        }
+
+        // ==================== v4.4 Win32 Low-Level Commands ====================
+
+        /// <summary>
+        /// Scroll using Win32 SendInput (low-level, works everywhere)
+        /// </summary>
+        private static void HandleScrollSendInput(JObject command)
+        {
+            try
+            {
+                var delta = command["delta"]?.ToObject<int>() ?? -120; // Negative = scroll down, positive = scroll up
+                var x = command["x"]?.ToObject<int?>();
+                var y = command["y"]?.ToObject<int?>();
+                var horizontal = command["horizontal"]?.ToObject<bool>() ?? false;
+
+                // If position specified, move mouse there first
+                if (x.HasValue && y.HasValue)
+                {
+                    SendInputMouseMove(x.Value, y.Value);
+                    Thread.Sleep(10); // Small delay to ensure position is set
+                }
+
+                var input = new INPUT
+                {
+                    type = INPUT_MOUSE,
+                    mkhi = new MOUSEKEYBDHARDWAREINPUT
+                    {
+                        mi = new MOUSEINPUT
+                        {
+                            dx = 0,
+                            dy = 0,
+                            mouseData = unchecked((uint)delta),
+                            dwFlags = horizontal ? MOUSEEVENTF_HWHEEL : MOUSEEVENTF_WHEEL,
+                            time = 0,
+                            dwExtraInfo = IntPtr.Zero
+                        }
+                    }
+                };
+                var result = SendInput(1, new[] { input }, Marshal.SizeOf(typeof(INPUT)));
+                
+                WriteSuccess("scroll_sendinput", new
+                {
+                    delta,
+                    horizontal,
+                    x = x ?? -1,
+                    y = y ?? -1,
+                    inputs_sent = result
+                });
+            }
+            catch (Exception ex)
+            {
+                WriteError("SCROLL_SENDINPUT_FAILED", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Type text using Win32 SendInput (low-level keyboard, works everywhere)
+        /// </summary>
+        private static async Task HandleTypeSendInput(JObject command)
+        {
+            var text = command["text"]?.ToString();
+            var delay = command["delay"]?.ToObject<int>() ?? 0; // Delay between characters in ms
+
+            if (string.IsNullOrEmpty(text))
+            {
+                WriteMissingParam("text");
+                return;
+            }
+
+            try
+            {
+                int charsSent = 0;
+                foreach (char c in text)
+                {
+                    // Use Unicode input for maximum compatibility
+                    var inputs = new INPUT[2];
+                    
+                    // Key down
+                    inputs[0] = new INPUT
+                    {
+                        type = INPUT_KEYBOARD,
+                        mkhi = new MOUSEKEYBDHARDWAREINPUT
+                        {
+                            ki = new KEYBDINPUT
+                            {
+                                wVk = 0,
+                                wScan = (ushort)c,
+                                dwFlags = KEYEVENTF_UNICODE,
+                                time = 0,
+                                dwExtraInfo = IntPtr.Zero
+                            }
+                        }
+                    };
+                    
+                    // Key up
+                    inputs[1] = new INPUT
+                    {
+                        type = INPUT_KEYBOARD,
+                        mkhi = new MOUSEKEYBDHARDWAREINPUT
+                        {
+                            ki = new KEYBDINPUT
+                            {
+                                wVk = 0,
+                                wScan = (ushort)c,
+                                dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
+                                time = 0,
+                                dwExtraInfo = IntPtr.Zero
+                            }
+                        }
+                    };
+                    
+                    SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT)));
+                    charsSent++;
+
+                    if (delay > 0)
+                    {
+                        await Task.Delay(delay);
+                    }
+                }
+
+                WriteSuccess("type_sendinput", new
+                {
+                    text,
+                    chars_sent = charsSent,
+                    delay
+                });
+            }
+            catch (Exception ex)
+            {
+                WriteError("TYPE_SENDINPUT_FAILED", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Set window always on top using Win32 SetWindowPos
+        /// </summary>
+        private static void HandleSetAlwaysOnTop(JObject command)
+        {
+            var selector = command["selector"]?.ToString();
+            var enable = command["enable"]?.ToObject<bool>() ?? true;
+
+            if (string.IsNullOrEmpty(selector))
+            {
+                WriteMissingParam("selector");
+                return;
+            }
+
+            try
+            {
+                var hwnd = GetWindowHandle(selector);
+                if (hwnd == IntPtr.Zero)
+                {
+                    WriteError("WINDOW_NOT_FOUND", $"Could not find window: {selector}");
+                    return;
+                }
+
+                var insertAfter = enable ? HWND_TOPMOST : HWND_NOTOPMOST;
+                var result = SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+                if (result)
+                {
+                    WriteSuccess("set_always_on_top", new
+                    {
+                        selector,
+                        always_on_top = enable,
+                        hwnd = hwnd.ToInt64()
+                    });
+                }
+                else
+                {
+                    WriteError("SET_ALWAYS_ON_TOP_FAILED", $"SetWindowPos failed for: {selector}");
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteError("SET_ALWAYS_ON_TOP_FAILED", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Flash window to get user attention using Win32 FlashWindowEx
+        /// </summary>
+        private static void HandleFlashWindow(JObject command)
+        {
+            var selector = command["selector"]?.ToString();
+            var count = command["count"]?.ToObject<uint>() ?? 3;
+            var timeout = command["timeout"]?.ToObject<uint>() ?? 0; // 0 = default cursor blink rate
+            var flags = command["flags"]?.ToString()?.ToLower() ?? "all";
+
+            if (string.IsNullOrEmpty(selector))
+            {
+                WriteMissingParam("selector");
+                return;
+            }
+
+            try
+            {
+                var hwnd = GetWindowHandle(selector);
+                if (hwnd == IntPtr.Zero)
+                {
+                    WriteError("WINDOW_NOT_FOUND", $"Could not find window: {selector}");
+                    return;
+                }
+
+                uint dwFlags = flags switch
+                {
+                    "caption" => FLASHW_CAPTION,
+                    "tray" => FLASHW_TRAY,
+                    "stop" => FLASHW_STOP,
+                    "timer" => FLASHW_TIMER | FLASHW_ALL,
+                    "timernofg" => FLASHW_TIMERNOFG | FLASHW_ALL,
+                    _ => FLASHW_ALL
+                };
+
+                var flashInfo = new FLASHWINFO
+                {
+                    cbSize = (uint)Marshal.SizeOf(typeof(FLASHWINFO)),
+                    hwnd = hwnd,
+                    dwFlags = dwFlags,
+                    uCount = count,
+                    dwTimeout = timeout
+                };
+
+                var result = FlashWindowEx(ref flashInfo);
+
+                WriteSuccess("flash_window", new
+                {
+                    selector,
+                    count,
+                    flags,
+                    hwnd = hwnd.ToInt64(),
+                    success = result
+                });
+            }
+            catch (Exception ex)
+            {
+                WriteError("FLASH_WINDOW_FAILED", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Set window opacity/transparency using Win32 SetLayeredWindowAttributes
+        /// </summary>
+        private static void HandleSetWindowOpacity(JObject command)
+        {
+            var selector = command["selector"]?.ToString();
+            var alpha = command["alpha"]?.ToObject<int>() ?? 255; // 0-255, where 255 = opaque
+            var colorKey = command["color_key"]?.ToString(); // Optional: color to make transparent
+
+            if (string.IsNullOrEmpty(selector))
+            {
+                WriteMissingParam("selector");
+                return;
+            }
+
+            // Clamp alpha to valid range
+            alpha = Math.Max(0, Math.Min(255, alpha));
+
+            try
+            {
+                var hwnd = GetWindowHandle(selector);
+                if (hwnd == IntPtr.Zero)
+                {
+                    WriteError("WINDOW_NOT_FOUND", $"Could not find window: {selector}");
+                    return;
+                }
+
+                // Get current extended style
+                int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+
+                // Add WS_EX_LAYERED if not already set
+                if ((exStyle & WS_EX_LAYERED) == 0)
+                {
+                    SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+                }
+
+                uint crKey = 0;
+                uint dwFlags = LWA_ALPHA;
+
+                // Parse color key if provided
+                if (!string.IsNullOrEmpty(colorKey))
+                {
+                    try
+                    {
+                        var color = ColorTranslator.FromHtml(colorKey);
+                        crKey = (uint)(color.R | (color.G << 8) | (color.B << 16));
+                        dwFlags |= LWA_COLORKEY;
+                    }
+                    catch { }
+                }
+
+                var result = SetLayeredWindowAttributes(hwnd, crKey, (byte)alpha, dwFlags);
+
+                if (result != 0)
+                {
+                    WriteSuccess("set_window_opacity", new
+                    {
+                        selector,
+                        alpha,
+                        opacity_percent = Math.Round((alpha / 255.0) * 100, 1),
+                        color_key = colorKey,
+                        hwnd = hwnd.ToInt64()
+                    });
+                }
+                else
+                {
+                    WriteError("SET_WINDOW_OPACITY_FAILED", $"SetLayeredWindowAttributes failed for: {selector}");
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteError("SET_WINDOW_OPACITY_FAILED", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Fast screenshot using GDI BitBlt (faster than CopyFromScreen)
+        /// </summary>
+        private static void HandleFastScreenshot(JObject command)
+        {
+            var region = command["region"];
+            var path = command["path"]?.ToString();
+            var format = command["format"]?.ToString()?.ToLower() ?? "png";
+
+            try
+            {
+                int x, y, width, height;
+
+                if (region is JArray regionArray)
+                {
+                    // Array format: [x, y, width, height]
+                    x = regionArray.Count > 0 ? regionArray[0].ToObject<int>() : 0;
+                    y = regionArray.Count > 1 ? regionArray[1].ToObject<int>() : 0;
+                    width = regionArray.Count > 2 ? regionArray[2].ToObject<int>() : GetSystemMetrics(SM_CXSCREEN);
+                    height = regionArray.Count > 3 ? regionArray[3].ToObject<int>() : GetSystemMetrics(SM_CYSCREEN);
+                }
+                else if (region is JObject regionObj)
+                {
+                    // Object format: {x, y, width, height}
+                    x = regionObj["x"]?.ToObject<int>() ?? 0;
+                    y = regionObj["y"]?.ToObject<int>() ?? 0;
+                    width = regionObj["width"]?.ToObject<int>() ?? GetSystemMetrics(SM_CXSCREEN);
+                    height = regionObj["height"]?.ToObject<int>() ?? GetSystemMetrics(SM_CYSCREEN);
+                }
+                else
+                {
+                    // No region specified - full screen
+                    x = 0;
+                    y = 0;
+                    width = GetSystemMetrics(SM_CXSCREEN);
+                    height = GetSystemMetrics(SM_CYSCREEN);
+                }
+
+                // Stopwatch for performance measurement
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                // Create device contexts
+                IntPtr hdcScreen = CreateDC("DISPLAY", null, null, IntPtr.Zero);
+                IntPtr hdcMem = CreateCompatibleDC(hdcScreen);
+                IntPtr hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
+                IntPtr hOldBitmap = SelectObject(hdcMem, hBitmap);
+
+                // Copy screen to bitmap
+                BitBlt(hdcMem, 0, 0, width, height, hdcScreen, x, y, SRCCOPY);
+
+                // Restore old bitmap and create managed bitmap
+                SelectObject(hdcMem, hOldBitmap);
+                var bitmap = Image.FromHbitmap(hBitmap);
+
+                // Clean up GDI objects
+                DeleteObject(hBitmap);
+                DeleteDC(hdcMem);
+                DeleteDC(hdcScreen);
+
+                sw.Stop();
+
+                // Determine output path
+                string outputPath;
+                if (string.IsNullOrEmpty(path))
+                {
+                    var tempDir = Path.Combine(Path.GetTempPath(), "agent-screenshots");
+                    Directory.CreateDirectory(tempDir);
+                    outputPath = Path.Combine(tempDir, $"fast-screenshot-{DateTime.Now:yyyyMMdd-HHmmss-fff}.{format}");
+                }
+                else
+                {
+                    outputPath = path;
+                }
+
+                // Save with appropriate format
+                var imageFormat = format switch
+                {
+                    "jpg" or "jpeg" => ImageFormat.Jpeg,
+                    "bmp" => ImageFormat.Bmp,
+                    "gif" => ImageFormat.Gif,
+                    _ => ImageFormat.Png
+                };
+                bitmap.Save(outputPath, imageFormat);
+                bitmap.Dispose();
+
+                var fileInfo = new FileInfo(outputPath);
+
+                WriteSuccess("fast_screenshot", new
+                {
+                    path = outputPath,
+                    x, y, width, height,
+                    format,
+                    size_bytes = fileInfo.Length,
+                    capture_ms = sw.ElapsedMilliseconds
+                });
+            }
+            catch (Exception ex)
+            {
+                WriteError("FAST_SCREENSHOT_FAILED", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Copy image to clipboard using Win32 APIs
+        /// </summary>
+        private static void HandleClipboardImage(JObject command)
+        {
+            var path = command["path"]?.ToString();
+            var operation = command["operation"]?.ToString()?.ToLower() ?? "set"; // "set" or "get"
+
+            // Clipboard operations require STA thread for OLE calls
+            Exception? threadException = null;
+            string? errorCode = null;
+            string? errorMessage = null;
+            string? successPath = null;
+            int successWidth = 0;
+            int successHeight = 0;
+            string? successOp = null;
+            bool isMissingParam = false;
+            string? missingParamName = null;
+            
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    if (operation == "get")
+                    {
+                        // Use WinForms Clipboard for STA-safe access
+                        if (!System.Windows.Forms.Clipboard.ContainsImage())
+                        {
+                            errorCode = "CLIPBOARD_NO_IMAGE";
+                            errorMessage = "No image in clipboard";
+                            return;
+                        }
+
+                        var image = System.Windows.Forms.Clipboard.GetImage();
+                        if (image == null)
+                        {
+                            errorCode = "CLIPBOARD_NO_IMAGE";
+                            errorMessage = "No image in clipboard";
+                            return;
+                        }
+
+                        // Determine output path
+                        string outputPath;
+                        if (string.IsNullOrEmpty(path))
+                        {
+                            var tempDir = Path.Combine(Path.GetTempPath(), "agent-screenshots");
+                            Directory.CreateDirectory(tempDir);
+                            outputPath = Path.Combine(tempDir, $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss-fff}.png");
+                        }
+                        else
+                        {
+                            outputPath = path;
+                        }
+
+                        image.Save(outputPath, ImageFormat.Png);
+                        successPath = outputPath;
+                        successWidth = image.Width;
+                        successHeight = image.Height;
+                        successOp = "get";
+                        image.Dispose();
+                    }
+                    else // operation == "set"
+                    {
+                        if (string.IsNullOrEmpty(path))
+                        {
+                            isMissingParam = true;
+                            missingParamName = "path";
+                            return;
+                        }
+
+                        if (!File.Exists(path))
+                        {
+                            errorCode = "FILE_NOT_FOUND";
+                            errorMessage = $"Image file not found: {path}";
+                            return;
+                        }
+
+                        using var image = Image.FromFile(path);
+                        using var bitmap = new Bitmap(image);
+
+                        // Use WinForms clipboard for STA-safe access
+                        System.Windows.Forms.Clipboard.SetImage(bitmap);
+
+                        successPath = path;
+                        successWidth = bitmap.Width;
+                        successHeight = bitmap.Height;
+                        successOp = "set";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    threadException = ex;
+                }
+            });
+            
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join(5000); // 5 second timeout
+
+            if (threadException != null)
+            {
+                WriteError("CLIPBOARD_IMAGE_FAILED", threadException.Message);
+                return;
+            }
+
+            if (isMissingParam)
+            {
+                WriteMissingParam(missingParamName ?? "unknown");
+                return;
+            }
+
+            if (errorCode != null)
+            {
+                WriteError(errorCode, errorMessage ?? "Unknown error");
+                return;
+            }
+
+            if (successOp != null)
+            {
+                WriteSuccess("clipboard_image", new
+                {
+                    operation = successOp,
+                    path = successPath,
+                    width = successWidth,
+                    height = successHeight
+                });
+            }
+            else
+            {
+                WriteError("CLIPBOARD_IMAGE_FAILED", "Clipboard operation timed out or failed");
+            }
+        }
 
         /// <summary>
         /// Wait for specific text to appear via OCR (using Python bridge WinRT OCR)
@@ -4983,19 +5931,19 @@ namespace MainAgentService
     /// <summary>
     /// Returns WebSocket URL for real-time screenshot streaming.
     /// </summary>
-    private static void HandleVisionStream(JsonElement command)
+    private static void HandleVisionStream(JObject command)
     {
         try
         {
             // Extract parameters with defaults
-            int fps = GetIntOrDefault(command, "fps", 5);
-            int quality = GetIntOrDefault(command, "quality", 70);
-            int maxWidth = GetIntOrDefault(command, "max_width", 1920);
-            int maxHeight = GetIntOrDefault(command, "max_height", 1080);
+            int fps = command["fps"]?.Value<int>() ?? 5;
+            int quality = command["quality"]?.Value<int>() ?? 70;
+            int maxWidth = command["max_width"]?.Value<int>() ?? 1920;
+            int maxHeight = command["max_height"]?.Value<int>() ?? 1080;
 
             var wsUrl = $"ws://localhost:5001/vision/stream?fps={fps}&quality={quality}&max_width={maxWidth}&max_height={maxHeight}";
 
-            Console.WriteLine(JsonSerializer.Serialize(new
+            WriteSuccess(new
             {
                 status = "success",
                 websocket_url = wsUrl,
@@ -5004,17 +5952,12 @@ namespace MainAgentService
                 max_width = maxWidth,
                 max_height = maxHeight,
                 instructions = "Connect to WebSocket URL to receive JPEG frames as base64."
-            }, JsonOptions));
+            });
         }
         catch (Exception ex)
         {
             WriteError("VISION_STREAM_FAILED", ex.Message);
         }
-    }
-
-    private static int GetIntOrDefault(JsonElement command, string property, int defaultValue)
-    {
-        return command.TryGetProperty(property, out var element) ? element.GetInt32() : defaultValue;
     }
 
     // ==================== SMART FALLBACK CHAIN (v4.0) ====================

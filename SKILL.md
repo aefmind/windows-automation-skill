@@ -1,7 +1,7 @@
 ---
 name: windows-desktop-automation
 description: AI agent capability for Windows desktop GUI automation via multi-engine orchestrator.
-version: 4.3.2
+version: 4.4.0
 ---
 
 # Windows Desktop Automation
@@ -29,7 +29,7 @@ node scripts/get-command-help.cjs --category mouse   # By category
 
 ---
 
-## All Commands (91 JSON + 18 HTTP endpoints)
+## All Commands (98 JSON + 18 HTTP endpoints)
 
 ### Discovery (9)
 | Command | Description |
@@ -97,11 +97,12 @@ node scripts/get-command-help.cjs --category mouse   # By category
 | `key_down` | Press and hold key |
 | `key_up` | Release held key |
 
-### Clipboard (2)
+### Clipboard (3)
 | Command | Description |
 |---------|-------------|
 | `get_clipboard` | Read clipboard text |
 | `set_clipboard` | Write text to clipboard |
+| `clipboard_image` | Copy image to/from clipboard (set/get) |
 
 ### Text/OCR (3)
 | Command | Description |
@@ -175,6 +176,17 @@ node scripts/get-command-help.cjs --category mouse   # By category
 | `vision_screenshot_cache_stats` | Get screenshot cache statistics |
 | `vision_screenshot_cache_clear` | Clear screenshot cache |
 | `vision_stream` | Get WebSocket URL for real-time screenshot streaming |
+
+### Win32 Low-Level Commands (7) - v4.4
+| Command | Description |
+|---------|-------------|
+| `scroll_sendinput` | Low-level scroll using Win32 SendInput (bypasses UI Automation) |
+| `type_sendinput` | Type Unicode text via Win32 SendInput (direct keyboard events) |
+| `set_always_on_top` | Pin/unpin window always on top using SetWindowPos |
+| `flash_window` | Flash window taskbar/caption for user attention |
+| `set_window_opacity` | Set window transparency (0-255 alpha) |
+| `fast_screenshot` | Fast GDI BitBlt screenshot (faster than WinForms) |
+| `clipboard_image` | Copy image to/from clipboard (set/get operations) |
 
 ### Batch/System (2)
 | Command | Description |
@@ -345,6 +357,102 @@ node scripts/send-command.cjs '{
 |-----------|------|---------|-------------|
 | `agent_fallback` | bool | false | Return screenshot on failure instead of error |
 | `jpeg_quality` | int | 75 | Screenshot quality when fallback triggers (1-100) |
+
+---
+
+### Win32 Low-Level Commands (v4.4)
+
+Direct Win32 API access for scenarios where UI Automation is too slow or doesn't work (games, custom controls, DirectX overlays).
+
+**scroll_sendinput** - Low-level mouse scroll
+```bash
+node scripts/send-command.cjs '{
+  "action": "scroll_sendinput",
+  "delta": -120,
+  "x": 500,
+  "y": 400,
+  "horizontal": false
+}'
+# delta: positive=up, negative=down (120 = 1 wheel notch)
+# x,y: optional, scrolls at current cursor if omitted
+# horizontal: optional, for horizontal scroll
+```
+
+**type_sendinput** - Unicode keyboard input
+```bash
+node scripts/send-command.cjs '{
+  "action": "type_sendinput",
+  "text": "Hello 世界! 🎉",
+  "delay": 10
+}'
+# Supports full Unicode including emoji
+# delay: optional ms between keystrokes (default 0)
+```
+
+**set_always_on_top** - Pin window above others
+```bash
+node scripts/send-command.cjs '{
+  "action": "set_always_on_top",
+  "selector": "Notepad",
+  "enable": true
+}'
+# enable: true=pin on top, false=normal z-order
+```
+
+**flash_window** - Flash window for attention
+```bash
+node scripts/send-command.cjs '{
+  "action": "flash_window",
+  "selector": "Visual Studio Code",
+  "count": 5,
+  "timeout": 0,
+  "flags": 3
+}'
+# count: number of flashes (0=until focused)
+# timeout: ms between flashes (0=default blink rate)
+# flags: 1=caption, 2=taskbar, 3=both (default)
+```
+
+**set_window_opacity** - Window transparency
+```bash
+node scripts/send-command.cjs '{
+  "action": "set_window_opacity",
+  "selector": "Paint",
+  "alpha": 180
+}'
+# alpha: 0=invisible, 255=fully opaque
+```
+
+**fast_screenshot** - GDI BitBlt screenshot
+```bash
+node scripts/send-command.cjs '{
+  "action": "fast_screenshot",
+  "region": [0, 0, 800, 600],
+  "path": "C:/screenshots/capture.png",
+  "format": "png"
+}'
+# region: [x, y, width, height] or {"x":0,"y":0,"width":800,"height":600}
+# path: optional, auto-generates temp path if omitted
+# format: png (default), jpg, bmp
+```
+
+**clipboard_image** - Image clipboard operations
+```bash
+# Copy image to clipboard
+node scripts/send-command.cjs '{
+  "action": "clipboard_image",
+  "operation": "set",
+  "path": "C:/images/photo.png"
+}'
+
+# Get image from clipboard
+node scripts/send-command.cjs '{
+  "action": "clipboard_image",
+  "operation": "get",
+  "path": "C:/output/clipboard.png"
+}'
+# path for get: optional, auto-generates temp path if omitted
+```
 
 ---
 
